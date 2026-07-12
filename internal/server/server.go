@@ -22,6 +22,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/server/resp"
 	"github.com/SumitKumar-17/cache-pot/internal/storage/memstore"
 	"github.com/SumitKumar-17/cache-pot/internal/toolcache"
+	"github.com/SumitKumar-17/cache-pot/internal/vector"
 )
 
 // shutdownGrace is how long Run waits for in-flight connections to finish
@@ -85,6 +86,7 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		SemanticCache: semantic.New(provider),
 		PromptCache:   semantic.NewPromptCache(),
 		ToolCache:     toolcache.New(),
+		VectorStore:   vector.New(),
 	}
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())

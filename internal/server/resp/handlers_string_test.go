@@ -11,6 +11,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/storage/memstore"
 	"github.com/SumitKumar-17/cache-pot/internal/toolcache"
+	"github.com/SumitKumar-17/cache-pot/internal/vector"
 )
 
 func newTestDeps(t *testing.T) *Deps {
@@ -29,6 +30,7 @@ func newTestDeps(t *testing.T) *Deps {
 		SemanticCache: semantic.New(embed.NewMock(8)),
 		PromptCache:   semantic.NewPromptCache(),
 		ToolCache:     toolcache.New(),
+		VectorStore:   vector.New(),
 	}
 }
 

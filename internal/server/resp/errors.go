@@ -55,6 +55,16 @@ const ErrInvalidJSONMsg = "ERR invalid variables JSON"
 // supplied args_json argument is not valid JSON.
 const ErrInvalidToolArgsJSONMsg = "ERR invalid args JSON"
 
+// ErrInvalidVectorJSONMsg is returned by VECTOR.UPSERT/VECTOR.SEARCH when
+// the supplied vector_json argument is not valid JSON, or is valid JSON but
+// not an array of numbers.
+const ErrInvalidVectorJSONMsg = "ERR invalid vector JSON"
+
+// ErrInvalidMetadataJSONMsg is returned by VECTOR.UPSERT when the supplied
+// metadata_json argument (after METADATA) is not valid JSON, or is valid
+// JSON but not an object.
+const ErrInvalidMetadataJSONMsg = "ERR invalid metadata JSON"
+
 // ErrUnknownCommand formats Redis's unknown-command error, including a
 // preview of the offending arguments.
 func ErrUnknownCommand(name string, args []string) string {

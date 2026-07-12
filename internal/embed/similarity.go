@@ -38,3 +38,46 @@ func Cosine(a, b []float32) float64 {
 
 	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
 }
+
+// Dot returns the raw dot (inner) product between vectors a and b: sum of
+// a[i]*b[i]. Unlike Cosine it is not scale-invariant or bounded to [-1, 1],
+// so it only makes sense to compare Dot scores against each other when
+// every vector involved is (approximately) unit length; comparing Dot
+// scores across differently-scaled vectors is not meaningful.
+//
+// Behavior on invalid input, matching Cosine's convention: if len(a) !=
+// len(b), or either slice is empty, the comparison is undefined and Dot
+// returns math.NaN().
+func Dot(a, b []float32) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return math.NaN()
+	}
+
+	var dot float64
+	for i := range a {
+		dot += float64(a[i]) * float64(b[i])
+	}
+	return dot
+}
+
+// Euclidean returns the Euclidean (L2) distance between vectors a and b: a
+// value in [0, +Inf) where 0 means the vectors are identical and larger
+// values mean the vectors are farther apart. Note this is a *distance*, not
+// a similarity: unlike Cosine/Dot, lower is better when ranking by this
+// metric.
+//
+// Behavior on invalid input, matching Cosine's convention: if len(a) !=
+// len(b), or either slice is empty, the comparison is undefined and
+// Euclidean returns math.NaN().
+func Euclidean(a, b []float32) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return math.NaN()
+	}
+
+	var sumSq float64
+	for i := range a {
+		d := float64(a[i]) - float64(b[i])
+		sumSq += d * d
+	}
+	return math.Sqrt(sumSq)
+}

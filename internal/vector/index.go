@@ -1,6 +1,10 @@
-// Package vector is a Phase 3 skeleton: a vector index seam (Upsert/Search/
-// Delete) for semantic/similarity search over embeddings. No implementation
-// exists yet in Phase 1.
+// Package vector implements Phase 3's native vector store: a flat
+// (brute-force) index of embeddings, partitioned by namespace, backing the
+// VECTOR.UPSERT/VECTOR.SEARCH/VECTOR.DELETE RESP commands (see
+// internal/server/resp/handlers_vector.go). It also declares Index, a
+// generic single-collection seam a future ANN implementation could satisfy;
+// Store (in store.go) is today's flat, namespace-partitioned implementation
+// and predates any per-namespace Index split -- see store.go's doc comment.
 package vector
 
 import "context"
@@ -15,8 +19,11 @@ const (
 )
 
 // Index is the Phase 3 vector-index seam: upsert an embedding under an ID,
-// search for nearest neighbors, and delete by ID. Not implemented in
-// Phase 1.
+// search for nearest neighbors, and delete by ID. It describes a single
+// collection; Store is the concrete, namespace-partitioned flat
+// implementation actually wired up to VECTOR.* today (see store.go). A
+// future ANN backend could implement Index per namespace without changing
+// this interface.
 type Index interface {
 	Upsert(ctx context.Context, id string, vector []float32, metadata map[string]string) error
 	Search(ctx context.Context, vector []float32, k int, metric DistanceMetric) ([]Match, error)

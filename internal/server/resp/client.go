@@ -10,6 +10,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/storage"
 	"github.com/SumitKumar-17/cache-pot/internal/toolcache"
+	"github.com/SumitKumar-17/cache-pot/internal/vector"
 )
 
 // defaultWorkspace is the single workspace Phase 1 operates in. The
@@ -32,10 +33,12 @@ type Deps struct {
 	// SemanticCache backs CACHE.SEMANTIC (similarity-based LLM response
 	// cache); PromptCache backs CACHE.PROMPT (exact-match template cache);
 	// ToolCache backs TOOL.CACHE (exact-match agent tool-call result
-	// cache).
+	// cache); VectorStore backs VECTOR.UPSERT/VECTOR.SEARCH/VECTOR.DELETE
+	// (Phase 3's native flat vector index, partitioned by namespace).
 	SemanticCache *semantic.SemanticCache
 	PromptCache   *semantic.PromptCache
 	ToolCache     *toolcache.ToolCache
+	VectorStore   *vector.Store
 }
 
 // ClientState is per-connection state: authentication, the selected

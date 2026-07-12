@@ -14,4 +14,5 @@ func RegisterAll(r *Registry) {
 	RegisterTx(r)
 	RegisterSemantic(r)
 	RegisterToolCache(r)
+	RegisterVector(r)
 }
