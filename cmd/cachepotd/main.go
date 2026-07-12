@@ -83,6 +83,12 @@ func parseConfig() server.Config {
 	}
 	envOpenAIAPIKey := os.Getenv("OPENAI_API_KEY")
 	envOpenAIAPIBase := os.Getenv("OPENAI_API_BASE")
+	envMCPPort := server.DefaultMCPPort
+	if v := os.Getenv("CACHEPOT_MCP_PORT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			envMCPPort = n
+		}
+	}
 
 	port := flag.Int("port", envPort, "TCP port to listen on (env CACHEPOT_PORT)")
 	password := flag.String("password", envPassword, "required AUTH password; empty means no auth (env CACHEPOT_PASSWORD)")
@@ -90,6 +96,7 @@ func parseConfig() server.Config {
 	embedProvider := flag.String("embed-provider", envEmbedProvider, `text-embedding backend for CACHE.SEMANTIC: "mock" or "openai" (env CACHEPOT_EMBED_PROVIDER)`)
 	openAIAPIKey := flag.String("openai-api-key", envOpenAIAPIKey, "OpenAI API key, required when --embed-provider=openai (env OPENAI_API_KEY)")
 	openAIAPIBase := flag.String("openai-api-base", envOpenAIAPIBase, `OpenAI-compatible API base URL, defaults to OpenAI's own API (env OPENAI_API_BASE)`)
+	mcpPort := flag.Int("mcp-port", envMCPPort, "TCP port for the native MCP (Model Context Protocol) HTTP server; 0 disables it (env CACHEPOT_MCP_PORT)")
 	flag.Parse()
 
 	return server.Config{
@@ -99,5 +106,6 @@ func parseConfig() server.Config {
 		EmbedProvider:  *embedProvider,
 		OpenAIAPIKey:   *openAIAPIKey,
 		OpenAIAPIBase:  *openAIAPIBase,
+		MCPPort:        *mcpPort,
 	}
 }

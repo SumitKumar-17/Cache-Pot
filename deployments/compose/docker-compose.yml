@@ -5,8 +5,10 @@ services:
       dockerfile: deployments/docker/Dockerfile
     ports:
       - "6380:6380"
+      - "6381:6381"
     environment:
       - CACHEPOT_PORT=6380
+      - CACHEPOT_MCP_PORT=6381
     volumes:
       - cachepot-data:/data # reserved for future persistence (no-op in Phase 1)
 

@@ -36,6 +36,12 @@ type Config struct {
 	// at an OpenAI-compatible endpoint (an Azure OpenAI deployment, a
 	// self-hosted gateway, etc.) instead of OpenAI's own API.
 	OpenAIAPIBase string
+
+	// MCPPort is the TCP port the native MCP (Model Context Protocol) HTTP
+	// server listens on, exposing the same SemanticCache/PromptCache/
+	// ToolCache/VectorStore instances the RESP listener uses as MCP tools
+	// (see internal/mcp). Set to 0 to disable the MCP listener entirely.
+	MCPPort int
 }
 
 const (
@@ -46,6 +52,11 @@ const (
 	// DefaultEmbedProvider is "mock" so cachepotd runs out of the box
 	// with no external dependencies/API keys required.
 	DefaultEmbedProvider = "mock"
+	// DefaultMCPPort is deliberately not a well-known port either, and
+	// sits right after DefaultPort so the two listeners are easy to
+	// remember together. Set --mcp-port/CACHEPOT_MCP_PORT to 0 to disable
+	// the MCP listener entirely.
+	DefaultMCPPort = 6381
 )
 
 // DefaultConfig returns the Phase 1 default configuration (no auth
@@ -55,5 +66,6 @@ func DefaultConfig() Config {
 		Port:           DefaultPort,
 		MaxConnections: DefaultMaxConnections,
 		EmbedProvider:  DefaultEmbedProvider,
+		MCPPort:        DefaultMCPPort,
 	}
 }

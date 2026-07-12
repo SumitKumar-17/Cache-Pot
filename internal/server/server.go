@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
+	"github.com/SumitKumar-17/cache-pot/internal/mcp"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/server/resp"
@@ -91,6 +93,30 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())
 
+	// The MCP HTTP server, if enabled, is started inside this same process
+	// and shares s.deps's SemanticCache/PromptCache/ToolCache/VectorStore
+	// instances with the RESP listener above -- an MCP client and a RESP
+	// client observe the exact same cache/vector-store state, with no
+	// adapter layer or second storage in between.
+	var mcpSrv *http.Server
+	var mcpDone chan struct{}
+	if s.cfg.MCPPort != 0 {
+		mcpLn, err := net.Listen("tcp", fmt.Sprintf(":%d", s.cfg.MCPPort))
+		if err != nil {
+			return fmt.Errorf("server: listen on MCP port %d: %w", s.cfg.MCPPort, err)
+		}
+		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore)
+		mcpSrv = &http.Server{Handler: mcpServer.Handler()}
+		mcpDone = make(chan struct{})
+		go func() {
+			defer close(mcpDone)
+			if err := mcpSrv.Serve(mcpLn); err != nil && err != http.ErrServerClosed {
+				s.logger.Error("mcp server error", "err", err)
+			}
+		}()
+		s.logger.Info("cachepot mcp server listening", "addr", mcpLn.Addr().String())
+	}
+
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -107,6 +133,11 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		<-ctx.Done()
 		closing.Store(true)
 		_ = ln.Close()
+		if mcpSrv != nil {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+			defer cancel()
+			_ = mcpSrv.Shutdown(shutdownCtx)
+		}
 	}()
 
 	for {
@@ -148,6 +179,14 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	case <-done:
 	case <-time.After(shutdownGrace):
 		s.logger.Warn("shutdown grace period elapsed with connections still active")
+	}
+
+	if mcpDone != nil {
+		select {
+		case <-mcpDone:
+		case <-time.After(shutdownGrace):
+			s.logger.Warn("mcp server shutdown grace period elapsed")
+		}
 	}
 
 	s.logger.Info("cachepot stopped")
