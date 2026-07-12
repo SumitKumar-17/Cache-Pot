@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http/httptest"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
+	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/server/resp"
@@ -35,6 +37,7 @@ type testEnv struct {
 	promptCache   *semantic.PromptCache
 	toolCache     *toolcache.ToolCache
 	vectorStore   *vector.Store
+	memoryStore   *memory.Store
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -44,8 +47,9 @@ func newTestEnv(t *testing.T) *testEnv {
 	promptCache := semantic.NewPromptCache()
 	toolCache := toolcache.New()
 	vectorStore := vector.New()
+	memoryStore := memory.New(embed.NewMock(8))
 
-	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore)
+	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
@@ -67,6 +71,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		promptCache:   promptCache,
 		toolCache:     toolCache,
 		vectorStore:   vectorStore,
+		memoryStore:   memoryStore,
 	}
 }
 
@@ -108,6 +113,8 @@ func TestListTools(t *testing.T) {
 		"cache_semantic_set",
 		"delete_vector",
 		"find_similar",
+		"recall",
+		"remember",
 		"store_vector",
 		"tool_cache_get",
 		"tool_cache_set",
@@ -250,6 +257,83 @@ func TestToolCacheSetThenGet(t *testing.T) {
 	}
 }
 
+func TestRememberThenRecall(t *testing.T) {
+	env := newTestEnv(t)
+
+	var rememberOut mcp.RememberOutput
+	env.call("remember", map[string]any{
+		"agent_id": "agent-1",
+		"content":  "the user prefers dark mode",
+	}, &rememberOut)
+	if rememberOut.ID == "" {
+		t.Fatalf("remember: got empty id")
+	}
+
+	var recallOut mcp.RecallOutput
+	env.call("recall", map[string]any{
+		"agent_id": "agent-1",
+		"query":    "the user prefers dark mode",
+	}, &recallOut)
+
+	found := false
+	for _, r := range recallOut.Results {
+		if r.ID == rememberOut.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("recall: remembered id %q not found in results %+v", rememberOut.ID, recallOut.Results)
+	}
+
+	// Confirm directly against the shared Store instance too, proving MCP
+	// wrote through to the exact same object rather than a private copy.
+	direct, foundDirect, err := env.memoryStore.Get(env.ctx, "default", rememberOut.ID)
+	if err != nil {
+		t.Fatalf("direct memoryStore.Get: %v", err)
+	}
+	if !foundDirect || direct.Content != "the user prefers dark mode" {
+		t.Fatalf("direct memoryStore.Get after MCP remember: got %+v, foundDirect=%v", direct, foundDirect)
+	}
+}
+
+// TestRecallDoesNotLeakOtherAgentsMemories proves recall has the same
+// no-cross-agent-leak guarantee as AGENT.RECALL: even when another agent's
+// memory is semantically identical (same content) and lives in the same
+// workspace, a recall for a different agent must never surface it.
+func TestRecallDoesNotLeakOtherAgentsMemories(t *testing.T) {
+	env := newTestEnv(t)
+
+	var ownOut mcp.RememberOutput
+	env.call("remember", map[string]any{
+		"agent_id": "agent-a",
+		"content":  "shared topic: database migrations",
+	}, &ownOut)
+
+	var otherOut mcp.RememberOutput
+	env.call("remember", map[string]any{
+		"agent_id": "agent-b",
+		"content":  "shared topic: database migrations",
+	}, &otherOut)
+
+	var recallOut mcp.RecallOutput
+	env.call("recall", map[string]any{
+		"agent_id": "agent-a",
+		"query":    "database migrations",
+	}, &recallOut)
+
+	if len(recallOut.Results) != 1 {
+		t.Fatalf("recall(agent-a): got %d results, want exactly 1: %+v", len(recallOut.Results), recallOut.Results)
+	}
+	if recallOut.Results[0].ID != ownOut.ID {
+		t.Fatalf("recall(agent-a): got id %q, want agent-a's own memory %q", recallOut.Results[0].ID, ownOut.ID)
+	}
+	for _, r := range recallOut.Results {
+		if r.ID == otherOut.ID {
+			t.Fatalf("recall(agent-a) leaked agent-b's memory %q", otherOut.ID)
+		}
+	}
+}
+
 // TestSharedStateWithRESP is the whole point of this package: it proves
 // there is no adapter layer or second storage between the MCP server and
 // the RESP server. It builds a real resp.Deps sharing the exact same
@@ -272,6 +356,7 @@ func TestSharedStateWithRESP(t *testing.T) {
 		PromptCache:   env.promptCache,
 		ToolCache:     env.toolCache,
 		VectorStore:   env.vectorStore,
+		MemoryStore:   env.memoryStore,
 	}
 
 	clientConn, serverConn := net.Pipe()
@@ -301,6 +386,47 @@ func TestSharedStateWithRESP(t *testing.T) {
 	respClient.send("CACHE.SEMANTIC GET written-by-mcp")
 	if got := respClient.recvBulk(); got != "mcp-response" {
 		t.Fatalf("RESP CACHE.SEMANTIC GET after MCP SET: got %q, want mcp-response", got)
+	}
+
+	// Memory: RESP AGENT.REMEMBER -> MCP recall.
+	respClient.send("AGENT.REMEMBER cross-agent remembered-via-resp")
+	memID := respClient.recvBulk()
+	if memID == "" {
+		t.Fatalf("AGENT.REMEMBER reply: got empty id")
+	}
+
+	var recallOut mcp.RecallOutput
+	env.call("recall", map[string]any{
+		"agent_id": "cross-agent",
+		"query":    "remembered-via-resp",
+	}, &recallOut)
+	foundViaMCP := false
+	for _, r := range recallOut.Results {
+		if r.ID == memID {
+			foundViaMCP = true
+		}
+	}
+	if !foundViaMCP {
+		t.Fatalf("MCP recall after RESP AGENT.REMEMBER: memory id %q not found in %+v", memID, recallOut.Results)
+	}
+
+	// Memory: MCP remember -> RESP AGENT.RECALL.
+	var rememberOut mcp.RememberOutput
+	env.call("remember", map[string]any{
+		"agent_id": "cross-agent",
+		"content":  "remembered-via-mcp",
+	}, &rememberOut)
+
+	respClient.send("AGENT.RECALL cross-agent remembered-via-mcp")
+	ids := respClient.recvArrayBulkStrings()
+	foundViaRESP := false
+	for _, id := range ids {
+		if id == rememberOut.ID {
+			foundViaRESP = true
+		}
+	}
+	if !foundViaRESP {
+		t.Fatalf("RESP AGENT.RECALL after MCP remember: memory id %q not found in %v", rememberOut.ID, ids)
 	}
 }
 
@@ -375,4 +501,28 @@ func (c *inlineRESPClient) recvBulk() string {
 	// yet; readLine's buffering loop handles that transparently since we
 	// just ask it for another line boundary.
 	return c.readLine()
+}
+
+// recvArrayBulkStrings reads one RESP2 array reply composed entirely of
+// bulk strings (e.g. AGENT.RECALL's reply) and returns their payloads in
+// order. A nil array ("*-1") or empty array ("*0") both yield an empty
+// slice.
+func (c *inlineRESPClient) recvArrayBulkStrings() []string {
+	c.t.Helper()
+	header := c.readLine()
+	if len(header) == 0 || header[0] != '*' {
+		c.t.Fatalf("expected array header, got %q", header)
+	}
+	if header == "*-1" || header == "*0" {
+		return nil
+	}
+	n, err := strconv.Atoi(header[1:])
+	if err != nil {
+		c.t.Fatalf("array header %q: %v", header, err)
+	}
+	out := make([]string, n)
+	for i := 0; i < n; i++ {
+		out[i] = c.recvBulk()
+	}
+	return out
 }

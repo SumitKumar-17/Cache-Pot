@@ -96,9 +96,10 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())
 
 	// The MCP HTTP server, if enabled, is started inside this same process
-	// and shares s.deps's SemanticCache/PromptCache/ToolCache/VectorStore
-	// instances with the RESP listener above -- an MCP client and a RESP
-	// client observe the exact same cache/vector-store state, with no
+	// and shares s.deps's SemanticCache/PromptCache/ToolCache/VectorStore/
+	// MemoryStore instances with the RESP listener above -- an MCP client
+	// and a RESP client observe the exact same cache/vector-store/memory
+	// state, with no
 	// adapter layer or second storage in between.
 	var mcpSrv *http.Server
 	var mcpDone chan struct{}
@@ -107,7 +108,7 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		if err != nil {
 			return fmt.Errorf("server: listen on MCP port %d: %w", s.cfg.MCPPort, err)
 		}
-		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore)
+		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore)
 		mcpSrv = &http.Server{Handler: mcpServer.Handler()}
 		mcpDone = make(chan struct{})
 		go func() {

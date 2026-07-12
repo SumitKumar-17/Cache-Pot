@@ -1,18 +1,20 @@
 // Package mcp implements Phase 3's native MCP (Model Context Protocol)
-// server: it exposes Cache-Pot's already-implemented cache/vector-store
-// capabilities as MCP tools, operating directly against the same shared
-// SemanticCache/PromptCache/ToolCache/VectorStore instances the RESP server
-// uses (see internal/server/resp.Deps). There is no adapter layer and no
-// separate process or storage -- an MCP tool call and a RESP command are two
-// front doors onto the exact same in-memory state.
+// server: it exposes Cache-Pot's already-implemented cache/vector-store/
+// agent-memory capabilities as MCP tools, operating directly against the
+// same shared SemanticCache/PromptCache/ToolCache/VectorStore/MemoryStore
+// instances the RESP server uses (see internal/server/resp.Deps). There is
+// no adapter layer and no separate process or storage -- an MCP tool call
+// and a RESP command are two front doors onto the exact same in-memory
+// state.
 //
 // Only tools backed by genuinely-implemented functionality are registered
-// here. The original product vision also imagined remember()/recall()/
-// summarize()-style tools, but those map to Phase 4 (agent memory) and
-// Phase 6 (consolidation), which are not implemented yet (internal/memory
-// and internal/consolidate are still empty skeletons) -- so they are
-// deliberately absent rather than faked. See each RegisterXxx function below
-// for the tools this phase does expose.
+// here. The original product vision also imagined a summarize()-style tool,
+// but that maps to Phase 6 (consolidation), which is not implemented yet
+// (internal/consolidate is still an empty skeleton) -- so it is deliberately
+// absent rather than faked. Phase 4 (agent memory, internal/memory) is now
+// real, so its remember()/recall() tools are exposed below alongside the
+// cache/vector tools. See each RegisterXxx function below for the tools
+// this phase does expose.
 package mcp
 
 import (
@@ -25,6 +27,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/toolcache"
 	"github.com/SumitKumar-17/cache-pot/internal/vector"
@@ -39,21 +42,32 @@ const (
 	defaultSemanticThreshold = 0.85
 	defaultSearchK           = 10
 
+	// defaultMemoryWorkspace, defaultMemoryKind, and defaultMemorySearchK
+	// mirror internal/server/resp/handlers_memory.go and
+	// handlers_agent.go's own defaults, so remember/recall behave
+	// identically to AGENT.REMEMBER/AGENT.RECALL when their optional
+	// parameters are omitted.
+	defaultMemoryWorkspace = "default"
+	defaultMemoryKind      = memory.LongTerm
+	defaultMemorySearchK   = 10
+
 	serverName    = "cachepot"
 	serverVersion = "0.3.0"
 )
 
-// Server exposes Cache-Pot's Phase 1-3 caches and vector store as MCP tools.
-// It holds no state of its own beyond the shared objects passed to New: all
-// six tools read/write directly through semanticCache/promptCache/toolCache/
-// vectorStore, the exact same instances threaded into resp.Deps by
-// internal/server/server.go, so an MCP client and a RESP client observe the
-// same cache/vector-store contents.
+// Server exposes Cache-Pot's Phase 1-4 caches, vector store, and agent
+// memory as MCP tools. It holds no state of its own beyond the shared
+// objects passed to New: every tool reads/writes directly through
+// semanticCache/promptCache/toolCache/vectorStore/memoryStore, the exact
+// same instances threaded into resp.Deps by internal/server/server.go, so
+// an MCP client and a RESP client observe the same cache/vector-store/
+// memory contents.
 type Server struct {
 	semanticCache *semantic.SemanticCache
 	promptCache   *semantic.PromptCache
 	toolCache     *toolcache.ToolCache
 	vectorStore   *vector.Store
+	memoryStore   *memory.Store
 
 	sdk *sdkmcp.Server
 }
@@ -61,24 +75,26 @@ type Server struct {
 // New builds an MCP Server backed by the given shared cache/store instances.
 // Callers (internal/server/server.go) must pass the exact same objects used
 // to build resp.Deps -- constructing new semantic.SemanticCache/
-// semantic.PromptCache/toolcache.ToolCache/vector.Store instances here
-// instead would silently create a second, disconnected memory space,
-// defeating the entire point of "no adapter layer".
-func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store) *Server {
+// semantic.PromptCache/toolcache.ToolCache/vector.Store/memory.Store
+// instances here instead would silently create a second, disconnected
+// memory space, defeating the entire point of "no adapter layer".
+func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store) *Server {
 	s := &Server{
 		semanticCache: semanticCache,
 		promptCache:   promptCache,
 		toolCache:     toolCache,
 		vectorStore:   vectorStore,
+		memoryStore:   memoryStore,
 	}
 	s.sdk = sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
 		Version: serverVersion,
 	}, &sdkmcp.ServerOptions{
-		Instructions: "Cache-Pot exposes its semantic/prompt/tool response caches and native vector store as MCP tools, backed by the exact same in-memory state as its RESP server.",
+		Instructions: "Cache-Pot exposes its semantic/prompt/tool response caches, native vector store, and shared agent memory (remember/recall) as MCP tools, backed by the exact same in-memory state as its RESP server.",
 	})
 	s.registerCacheTools()
 	s.registerVectorTools()
+	s.registerMemoryTools()
 	return s
 }
 
@@ -427,4 +443,129 @@ func (s *Server) registerVectorTools() {
 		Name:        "delete_vector",
 		Description: "Remove the vector stored under (namespace, id), reporting whether it existed. Backed by the same vector.Store instance as the VECTOR.DELETE RESP command.",
 	}, s.deleteVector)
+}
+
+// ---- AGENT.REMEMBER / AGENT.RECALL ----
+
+// RememberInput is the input for remember, mirroring
+// AGENT.REMEMBER <agent_id> <content> [WORKSPACE <workspace>]
+// [KIND short_term|long_term|episodic|semantic] [METADATA <metadata_json>]
+// [TTL <seconds>]. Like AGENT.REMEMBER, there is no explicit-ID option:
+// remember always generates a fresh memory id rather than supporting
+// upsert-by-id (MEMORY.PUT's ID option, not exposed as an MCP tool here).
+type RememberInput struct {
+	AgentID string `json:"agent_id" jsonschema:"id of the agent this memory belongs to"`
+	Content string `json:"content" jsonschema:"the text content to remember"`
+	// Workspace and Kind default to "default" and "long_term" respectively
+	// when empty, matching AGENT.REMEMBER's defaults when WORKSPACE/KIND
+	// are omitted.
+	Workspace  string            `json:"workspace,omitempty" jsonschema:"workspace this memory belongs to; defaults to \"default\" if omitted or empty"`
+	Kind       string            `json:"kind,omitempty" jsonschema:"memory kind: \"short_term\", \"long_term\" (default), \"episodic\", or \"semantic\""`
+	Metadata   map[string]string `json:"metadata,omitempty" jsonschema:"optional string-valued metadata to store alongside this memory"`
+	TTLSeconds int               `json:"ttl_seconds,omitempty" jsonschema:"entry lifetime in seconds; omitted or <=0 means the memory never expires"`
+}
+
+// RememberOutput is the output for remember.
+type RememberOutput struct {
+	ID string `json:"id"`
+}
+
+func (s *Server) remember(ctx context.Context, _ *sdkmcp.CallToolRequest, in RememberInput) (*sdkmcp.CallToolResult, RememberOutput, error) {
+	workspace := in.Workspace
+	if workspace == "" {
+		workspace = defaultMemoryWorkspace
+	}
+	kind := defaultMemoryKind
+	if in.Kind != "" {
+		k, ok := memory.ParseKind(in.Kind)
+		if !ok {
+			return nil, RememberOutput{}, fmt.Errorf("mcp: unknown kind %q (want \"short_term\", \"long_term\", \"episodic\", or \"semantic\")", in.Kind)
+		}
+		kind = k
+	}
+
+	m := memory.Memory{
+		AgentID:     in.AgentID,
+		WorkspaceID: workspace,
+		Kind:        kind,
+		Content:     in.Content,
+		Metadata:    in.Metadata,
+	}
+
+	id, err := s.memoryStore.Put(ctx, m, ttlFromSeconds(in.TTLSeconds))
+	if err != nil {
+		return nil, RememberOutput{}, err
+	}
+	return nil, RememberOutput{ID: id}, nil
+}
+
+// RecallInput is the input for recall, mirroring
+// AGENT.RECALL <agent_id> <query> [WORKSPACE <workspace>] [KIND <kind>]
+// [K <n>] [THRESHOLD <float>]. agent_id is always applied as the AGENT
+// filter, same as AGENT.RECALL -- this tool can only surface the given
+// agent's own memories, never another agent's.
+type RecallInput struct {
+	AgentID   string   `json:"agent_id" jsonschema:"id of the agent whose own memories to search -- results are always scoped to this agent"`
+	Query     string   `json:"query" jsonschema:"free-text query to rank memories against by semantic similarity"`
+	Workspace string   `json:"workspace,omitempty" jsonschema:"workspace to search within; defaults to \"default\" if omitted or empty"`
+	Kind      string   `json:"kind,omitempty" jsonschema:"optional memory kind filter: \"short_term\", \"long_term\", \"episodic\", or \"semantic\""`
+	K         int      `json:"k,omitempty" jsonschema:"max number of results to return; defaults to 10 if omitted"`
+	Threshold *float64 `json:"threshold,omitempty" jsonschema:"optional minimum cosine similarity in [-1,1] a result must meet; omitted means no minimum (best K matches regardless of score)"`
+}
+
+// RecallMatch is one recalled memory's id and similarity score.
+type RecallMatch struct {
+	ID    string  `json:"id"`
+	Score float64 `json:"score"`
+}
+
+// RecallOutput is the output for recall.
+type RecallOutput struct {
+	Results []RecallMatch `json:"results"`
+}
+
+func (s *Server) recall(ctx context.Context, _ *sdkmcp.CallToolRequest, in RecallInput) (*sdkmcp.CallToolResult, RecallOutput, error) {
+	workspace := in.Workspace
+	if workspace == "" {
+		workspace = defaultMemoryWorkspace
+	}
+	var kind *memory.Kind
+	if in.Kind != "" {
+		k, ok := memory.ParseKind(in.Kind)
+		if !ok {
+			return nil, RecallOutput{}, fmt.Errorf("mcp: unknown kind %q (want \"short_term\", \"long_term\", \"episodic\", or \"semantic\")", in.Kind)
+		}
+		kind = &k
+	}
+	k := defaultMemorySearchK
+	if in.K != 0 {
+		k = in.K
+	}
+
+	results, err := s.memoryStore.Search(ctx, workspace, in.Query, memory.SearchOptions{
+		AgentID:   in.AgentID,
+		Kind:      kind,
+		K:         k,
+		Threshold: in.Threshold,
+	})
+	if err != nil {
+		return nil, RecallOutput{}, err
+	}
+	out := make([]RecallMatch, len(results))
+	for i, r := range results {
+		out[i] = RecallMatch{ID: r.ID, Score: r.Score}
+	}
+	return nil, RecallOutput{Results: out}, nil
+}
+
+func (s *Server) registerMemoryTools() {
+	sdkmcp.AddTool(s.sdk, &sdkmcp.Tool{
+		Name:        "remember",
+		Description: "Store a memory for this agent, retrievable later by meaning via recall. Backed by the same memory.Store instance as the AGENT.REMEMBER RESP command; always generates a fresh memory id.",
+	}, s.remember)
+
+	sdkmcp.AddTool(s.sdk, &sdkmcp.Tool{
+		Name:        "recall",
+		Description: "Recall this agent's own past memories relevant to a query, ranked by semantic similarity. Never returns another agent's memories. Backed by the same memory.Store instance as the AGENT.RECALL RESP command.",
+	}, s.recall)
 }
