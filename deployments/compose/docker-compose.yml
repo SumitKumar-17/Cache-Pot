@@ -1,0 +1,14 @@
+services:
+  cachepot:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "6380:6380"
+    environment:
+      - CACHEPOT_PORT=6380
+    volumes:
+      - cachepot-data:/data # reserved for future persistence (no-op in Phase 1)
+
+volumes:
+  cachepot-data:

@@ -1,0 +1,22 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+/cachepotd
+
+# Node / VitePress
+docs/node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+npm-debug.log*
+
+# Docker
+*.pid
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,16 @@
+{
+  "name": "cache-pot-docs",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Documentation site for Cache-Pot, the memory engine for AI agents",
+  "type": "module",
+  "scripts": {
+    "generate-commands": "node .vitepress/generate-commands.mjs",
+    "docs:dev": "npm run generate-commands && vitepress dev .",
+    "docs:build": "npm run generate-commands && vitepress build .",
+    "docs:preview": "vitepress preview ."
+  },
+  "devDependencies": {
+    "vitepress": "^1.3.4"
+  }
+}

@@ -1,0 +1,490 @@
+# Cache-Pot command surface: the single source of truth for every command
+# across all 7 phases of the roadmap, not just what's implemented today.
+#
+# Fields:
+#   name:    the RESP command name as a client would send it
+#   category: functional grouping
+#   phase:   which roadmap phase introduces this command (1-7)
+#   status:  "real" (implemented) or "planned" (designed, not implemented)
+#   summary: one-line description
+
+# --- Phase 1: Redis-compatible core (status: real) --------------------
+
+- name: PING
+  category: connection
+  phase: 1
+  status: real
+  summary: Check server liveness / measure round-trip latency
+- name: ECHO
+  category: connection
+  phase: 1
+  status: real
+  summary: Echo back the given argument
+- name: SELECT
+  category: connection
+  phase: 1
+  status: real
+  summary: Select a logical database (Phase 1 only accepts db 0)
+- name: HELLO
+  category: connection
+  phase: 1
+  status: real
+  summary: Protocol handshake (RESP2 only in Phase 1; RESP3 rejected cleanly)
+- name: AUTH
+  category: connection
+  phase: 1
+  status: real
+  summary: Authenticate the connection against the configured password
+- name: CLIENT
+  category: connection
+  phase: 1
+  status: real
+  summary: Client introspection/control (GETNAME/SETNAME in Phase 1)
+- name: COMMAND
+  category: connection
+  phase: 1
+  status: real
+  summary: Minimal command-table introspection
+- name: INFO
+  category: connection
+  phase: 1
+  status: real
+  summary: Minimal server info/stats sections
+- name: QUIT
+  category: connection
+  phase: 1
+  status: real
+  summary: Close the connection
+
+- name: DEL
+  category: generic
+  phase: 1
+  status: real
+  summary: Delete one or more keys
+- name: EXISTS
+  category: generic
+  phase: 1
+  status: real
+  summary: Count how many of the given keys exist
+- name: EXPIRE
+  category: generic
+  phase: 1
+  status: real
+  summary: Set a key's time-to-live in seconds
+- name: PEXPIRE
+  category: generic
+  phase: 1
+  status: real
+  summary: Set a key's time-to-live in milliseconds
+- name: TTL
+  category: generic
+  phase: 1
+  status: real
+  summary: Get a key's remaining time-to-live in seconds
+- name: PTTL
+  category: generic
+  phase: 1
+  status: real
+  summary: Get a key's remaining time-to-live in milliseconds
+- name: PERSIST
+  category: generic
+  phase: 1
+  status: real
+  summary: Remove a key's expiry, making it persistent
+- name: TYPE
+  category: generic
+  phase: 1
+  status: real
+  summary: Get the data type stored at a key
+- name: KEYS
+  category: generic
+  phase: 1
+  status: real
+  summary: Find all keys matching a glob pattern
+- name: SCAN
+  category: generic
+  phase: 1
+  status: real
+  summary: Cursor-based incremental iteration over the keyspace
+- name: RENAME
+  category: generic
+  phase: 1
+  status: real
+  summary: Rename a key
+- name: FLUSHDB
+  category: generic
+  phase: 1
+  status: real
+  summary: Remove all keys from the current workspace
+- name: FLUSHALL
+  category: generic
+  phase: 1
+  status: real
+  summary: Remove all keys from all workspaces (Phase 1: single workspace)
+
+- name: GET
+  category: strings
+  phase: 1
+  status: real
+  summary: Get the value of a key
+- name: SET
+  category: strings
+  phase: 1
+  status: real
+  summary: Set the value of a key, with optional EX/PX/NX/XX/GET modifiers
+- name: MGET
+  category: strings
+  phase: 1
+  status: real
+  summary: Get the values of multiple keys
+- name: MSET
+  category: strings
+  phase: 1
+  status: real
+  summary: Set multiple key/value pairs atomically
+- name: INCR
+  category: strings
+  phase: 1
+  status: real
+  summary: Increment an integer value by 1
+- name: INCRBY
+  category: strings
+  phase: 1
+  status: real
+  summary: Increment an integer value by a given amount
+- name: DECR
+  category: strings
+  phase: 1
+  status: real
+  summary: Decrement an integer value by 1
+- name: DECRBY
+  category: strings
+  phase: 1
+  status: real
+  summary: Decrement an integer value by a given amount
+- name: APPEND
+  category: strings
+  phase: 1
+  status: real
+  summary: Append a value to an existing string, creating it if absent
+- name: STRLEN
+  category: strings
+  phase: 1
+  status: real
+  summary: Get the length of a string value
+
+- name: HSET
+  category: hash
+  phase: 1
+  status: real
+  summary: Set one or more hash field/value pairs
+- name: HGET
+  category: hash
+  phase: 1
+  status: real
+  summary: Get the value of a hash field
+- name: HGETALL
+  category: hash
+  phase: 1
+  status: real
+  summary: Get all field/value pairs in a hash
+- name: HDEL
+  category: hash
+  phase: 1
+  status: real
+  summary: Delete one or more hash fields
+- name: HEXISTS
+  category: hash
+  phase: 1
+  status: real
+  summary: Check whether a hash field exists
+- name: HKEYS
+  category: hash
+  phase: 1
+  status: real
+  summary: Get all field names in a hash
+- name: HVALS
+  category: hash
+  phase: 1
+  status: real
+  summary: Get all values in a hash
+- name: HLEN
+  category: hash
+  phase: 1
+  status: real
+  summary: Get the number of fields in a hash
+- name: HMGET
+  category: hash
+  phase: 1
+  status: real
+  summary: Get the values of multiple hash fields
+- name: HINCRBY
+  category: hash
+  phase: 1
+  status: real
+  summary: Increment an integer hash field by a given amount
+
+- name: LPUSH
+  category: list
+  phase: 1
+  status: real
+  summary: Push one or more values onto the head of a list
+- name: RPUSH
+  category: list
+  phase: 1
+  status: real
+  summary: Push one or more values onto the tail of a list
+- name: LPOP
+  category: list
+  phase: 1
+  status: real
+  summary: Pop a value from the head of a list
+- name: RPOP
+  category: list
+  phase: 1
+  status: real
+  summary: Pop a value from the tail of a list
+- name: LRANGE
+  category: list
+  phase: 1
+  status: real
+  summary: Get a range of elements from a list
+- name: LLEN
+  category: list
+  phase: 1
+  status: real
+  summary: Get the length of a list
+- name: LINDEX
+  category: list
+  phase: 1
+  status: real
+  summary: Get an element from a list by index
+- name: LSET
+  category: list
+  phase: 1
+  status: real
+  summary: Set the value of a list element by index
+- name: LREM
+  category: list
+  phase: 1
+  status: real
+  summary: Remove matching elements from a list
+
+- name: SADD
+  category: set
+  phase: 1
+  status: real
+  summary: Add one or more members to a set
+- name: SREM
+  category: set
+  phase: 1
+  status: real
+  summary: Remove one or more members from a set
+- name: SMEMBERS
+  category: set
+  phase: 1
+  status: real
+  summary: Get all members of a set
+- name: SISMEMBER
+  category: set
+  phase: 1
+  status: real
+  summary: Check whether a value is a member of a set
+- name: SCARD
+  category: set
+  phase: 1
+  status: real
+  summary: Get the number of members in a set
+- name: SINTER
+  category: set
+  phase: 1
+  status: real
+  summary: Get the intersection of multiple sets
+- name: SUNION
+  category: set
+  phase: 1
+  status: real
+  summary: Get the union of multiple sets
+- name: SDIFF
+  category: set
+  phase: 1
+  status: real
+  summary: Get the difference of multiple sets
+
+- name: ZADD
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Add one or more scored members to a sorted set
+- name: ZREM
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Remove one or more members from a sorted set
+- name: ZRANGE
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Get a range of members by rank, lowest score first
+- name: ZREVRANGE
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Get a range of members by rank, highest score first
+- name: ZSCORE
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Get the score of a member
+- name: ZRANK
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Get the rank of a member, lowest score first
+- name: ZCARD
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Get the number of members in a sorted set
+- name: ZINCRBY
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Increment a member's score by a given amount
+- name: ZRANGEBYSCORE
+  category: sorted-set
+  phase: 1
+  status: real
+  summary: Get members within a score range
+
+- name: SUBSCRIBE
+  category: pubsub
+  phase: 1
+  status: real
+  summary: Subscribe to one or more channels
+- name: UNSUBSCRIBE
+  category: pubsub
+  phase: 1
+  status: real
+  summary: Unsubscribe from one or more channels (or all, if none given)
+- name: PUBLISH
+  category: pubsub
+  phase: 1
+  status: real
+  summary: Publish a message to a channel
+- name: PSUBSCRIBE
+  category: pubsub
+  phase: 1
+  status: real
+  summary: Subscribe to channels matching a glob pattern
+
+- name: MULTI
+  category: transactions
+  phase: 1
+  status: real
+  summary: Begin queueing commands for atomic execution
+- name: EXEC
+  category: transactions
+  phase: 1
+  status: real
+  summary: Execute all commands queued since MULTI
+- name: DISCARD
+  category: transactions
+  phase: 1
+  status: real
+  summary: Discard all commands queued since MULTI
+- name: WATCH
+  category: transactions
+  phase: 1
+  status: real
+  summary: Watch keys, aborting a subsequent EXEC if any changed
+- name: UNWATCH
+  category: transactions
+  phase: 1
+  status: real
+  summary: Forget all watched keys
+
+# --- Phase 2: semantic cache, prompt cache, tool cache (status: planned) --
+
+- name: CACHE.SEMANTIC
+  category: semantic-cache
+  phase: 2
+  status: planned
+  summary: Semantic-similarity cache lookup for LLM responses
+- name: CACHE.PROMPT
+  category: semantic-cache
+  phase: 2
+  status: planned
+  summary: Store/retrieve a prompt+response pair for semantic cache lookup
+- name: TOOL.CACHE
+  category: tool-cache
+  phase: 2
+  status: planned
+  summary: Cache the result of an agent tool/function call by arguments
+
+# --- Phase 3: vector search + MCP server (status: planned) ---------------
+
+- name: VECTOR.UPSERT
+  category: vector
+  phase: 3
+  status: planned
+  summary: Insert or update a vector embedding in a named index
+- name: VECTOR.SEARCH
+  category: vector
+  phase: 3
+  status: planned
+  summary: Nearest-neighbor search over a vector index
+- name: VECTOR.DELETE
+  category: vector
+  phase: 3
+  status: planned
+  summary: Delete a vector from a named index
+
+# --- Phase 4: shared agent memory (status: planned) -----------------------
+
+- name: MEMORY.PUT
+  category: agent-memory
+  phase: 4
+  status: planned
+  summary: Store a memory item for an agent/workspace
+- name: MEMORY.GET
+  category: agent-memory
+  phase: 4
+  status: planned
+  summary: Retrieve a memory item by ID
+- name: MEMORY.SEARCH
+  category: agent-memory
+  phase: 4
+  status: planned
+  summary: Semantic/metadata search over an agent's memories
+- name: AGENT.REMEMBER
+  category: agent-memory
+  phase: 4
+  status: planned
+  summary: High-level helper to store an agent memory from raw content
+- name: AGENT.RECALL
+  category: agent-memory
+  phase: 4
+  status: planned
+  summary: High-level helper to recall relevant agent memories for a prompt
+
+# --- Phase 6: consolidation + knowledge graph (status: planned) -----------
+
+- name: SUMMARY.CREATE
+  category: consolidation
+  phase: 6
+  status: planned
+  summary: Consolidate accumulated episodic memories into a summary
+- name: GRAPH.RELATED
+  category: knowledge-graph
+  phase: 6
+  status: planned
+  summary: Find entities/memories related to a given node in the knowledge graph
+
+# --- Phase 7: versioning + multi-tenancy (status: planned) ----------------
+
+- name: MEMORY.HISTORY
+  category: versioning
+  phase: 7
+  status: planned
+  summary: Fetch the version history of a memory item
