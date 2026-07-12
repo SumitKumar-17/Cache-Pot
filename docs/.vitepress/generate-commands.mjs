@@ -100,7 +100,7 @@ function render(commands) {
   const total = commands.length;
   const real = commands.filter((c) => c.status === "real").length;
   const planned = total - real;
-  lines.push(`*${total} commands total: ${real} real (Phase 1), ${planned} planned (Phases 2-7). Generated from \`api/commands.yaml\`.*`);
+  lines.push(`*${total} commands total: ${real} real, ${planned} planned. Generated from \`api/commands.yaml\`.*`);
   lines.push("");
   return lines.join("\n");
 }

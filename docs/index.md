@@ -21,6 +21,7 @@ memory engine instead of four separate services.
 | | Redis | + Vector DB | + Mem0/LangMem | + MCP adapters | **Cache-Pot** |
 |---|---|---|---|---|---|
 | Fast KV cache | ✅ | | | | ✅ |
+| Semantic/prompt/tool-call caching | | | partial | | ✅ |
 | Vector search | | ✅ | | | Planned ([Phase 3](/roadmap/#phase-3-—-native-vector-store-mcp-server-planned)) |
 | Agent memory (semantic recall) | | | ✅ | | Planned ([Phase 4](/roadmap/#phase-4-—-agent-memory-shared-memory-planned)) |
 | Shared memory across agents/models | | | partial | | Planned ([Phase 4](/roadmap/#phase-4-—-agent-memory-shared-memory-planned)) |
@@ -45,21 +46,22 @@ See the full [installation](/getting-started/installation) and
 [quickstart](/getting-started/quickstart) guides for building from source and
 connecting with a client library.
 
-## Status: Phase 1
+## Status: Phases 1-2
 
 Cache-Pot is being built in seven phases (see the [roadmap](/roadmap/)).
-**Today, only Phase 1 is real.**
+**Today, Phases 1 and 2 are real.**
 
 - ✅ **Real today:** RESP2 protocol, pipelining, strings/hashes/lists/sets/sorted
   sets, TTL (active + passive expiry), transactions (`MULTI`/`EXEC`/`WATCH`),
-  Pub/Sub. See the [command reference](/commands/) for the exact list.
-- 🔶 **Designed, not built yet:** semantic caching, native vector search,
-  shared agent memory, tool-result caching, a native MCP server, memory
-  versioning, a knowledge graph, cost analytics, and multi-tenancy. These are
-  scoped in the [roadmap](/roadmap/) but do not exist in the codebase today.
+  Pub/Sub (Phase 1) — plus `CACHE.SEMANTIC`, `CACHE.PROMPT`, and `TOOL.CACHE`
+  (Phase 2). See the [command reference](/commands/) for the exact list.
+- 🔶 **Designed, not built yet:** native vector search, shared agent memory, a
+  native MCP server, memory versioning, a knowledge graph, cost analytics, and
+  multi-tenancy. These are scoped in the [roadmap](/roadmap/) but do not exist
+  in the codebase today.
 
-Cache-Pot is also volatile, in-memory-only storage in Phase 1 — there is no
-persistence yet, and data is lost on restart. Read
+Cache-Pot is also volatile, in-memory-only storage — there is no persistence
+yet, and data is lost on restart. Read
 [Redis compatibility](/architecture/redis-compatibility) for the full, honest
 list of what "Redis-compatible" does and does not mean right now.
 

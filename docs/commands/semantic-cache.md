@@ -1,30 +1,64 @@
 # Semantic Cache Commands
 
-::: info Planned — Phase 2
-These commands are designed but not implemented yet. See the
-[roadmap](/roadmap/) for details.
+::: tip Phase 2 — real
+These commands work today. They require an embedding provider — see
+[configuration](/getting-started/configuration) for `--embed-provider`.
 :::
 
 | Command | Summary |
 |---|---|
-| `CACHE.SEMANTIC` | Semantic-similarity cache lookup for LLM responses |
-| `CACHE.PROMPT` | Store/retrieve a prompt+response pair for semantic cache lookup |
+| `CACHE.SEMANTIC` | Cache/retrieve an LLM response by embedding-similarity match |
+| `CACHE.PROMPT` | Cache/retrieve a response by an exact (template, variables, model) key |
 
-## What this will do
+## CACHE.SEMANTIC
 
-Phase 2 introduces caching keyed by *meaning* rather than exact string match
-— an LLM call with a rephrased-but-equivalent prompt should still hit the
-cache. This depends on a pluggable embedding-provider abstraction (OpenAI,
-local models, etc.), planned as part of the same phase.
+Caches an LLM response keyed by *meaning*, not exact string match — a rephrased-but-
+equivalent prompt can still hit the cache.
 
-- `CACHE.SEMANTIC` will look up a cached LLM response by embedding
-  similarity against previously cached prompts, rather than requiring an
-  exact string match.
-- `CACHE.PROMPT` will key by `(prompt template + variables + model
-  version)`, so changing a template invalidates only the entries affected by
-  that change — not the entire cache.
+```
+CACHE.SEMANTIC SET <prompt> <response> [MODEL <model>] [TEMP <temperature>] [TTL <seconds>]
+CACHE.SEMANTIC GET <prompt> [MODEL <model>] [TEMP <temperature>] [THRESHOLD <float>]
+```
 
-None of this exists in the codebase today. See
-[internal/semantic](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/semantic)
-for the current scaffolding, and [tool-cache](/commands/tool-cache) for the
-related tool-result caching commands landing in the same phase.
+- `MODEL` and `TEMP` partition the cache — a hit is only ever considered against entries
+  stored under the same model and temperature. Both default to a fixed default
+  partition if omitted.
+- `GET` embeds `<prompt>` and returns the response of the closest previously-`SET`
+  prompt in that partition, if its cosine similarity is at or above `THRESHOLD`
+  (default `0.85`). Otherwise it returns a nil reply, same as `GET` on a missing key.
+- Matching is a brute-force scan within the partition (no approximate index yet — see
+  [Phase 3](/roadmap/#phase-3-—-native-vector-store-mcp-server-planned) for the native
+  vector store this will eventually share logic with).
+
+```bash
+redis-cli -p 6380 CACHE.SEMANTIC SET "What is Kubernetes?" "K8s is a container orchestrator." MODEL gpt-4
+redis-cli -p 6380 CACHE.SEMANTIC GET "what is k8s?" MODEL gpt-4
+# -> "K8s is a container orchestrator."
+```
+
+## CACHE.PROMPT
+
+Caches a response keyed by the *exact* combination of a prompt template, its variables,
+and a model — useful when you want deterministic reuse rather than similarity matching.
+
+```
+CACHE.PROMPT SET <template> <variables_json> <model> <response> [TTL <seconds>]
+CACHE.PROMPT GET <template> <variables_json> <model>
+```
+
+- `<variables_json>` is a JSON object, e.g. `{"name":"Sumit","lang":"Go"}`. It's
+  canonicalized before hashing, so key order in the JSON doesn't affect the cache key.
+- The cache key includes the raw `<template>` text itself, so **changing the template
+  string automatically invalidates only the entries tied to that exact template** — no
+  separate invalidation step is needed.
+- Invalid JSON in `<variables_json>` is a RESP error on both `SET` and `GET`.
+
+```bash
+redis-cli -p 6380 CACHE.PROMPT SET "Hello {{name}}" '{"name":"Sumit"}' gpt-4 "Hi Sumit!"
+redis-cli -p 6380 CACHE.PROMPT GET "Hello {{name}}" '{"name": "Sumit"}' gpt-4
+# -> "Hi Sumit!"  (key order in the JSON doesn't matter)
+```
+
+See [`internal/semantic`](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/semantic)
+for the implementation, and [tool cache](/commands/tool-cache) for the related
+tool-result caching command landing in the same phase.

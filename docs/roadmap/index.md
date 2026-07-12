@@ -8,7 +8,7 @@ treated as such below.
 
 Dependency chain: `1 → 2 → 3 → 4 → 5 → 6 → 7`.
 
-## Phase 1 — Redis-Compatible Core ✅ *in progress*
+## Phase 1 — Redis-Compatible Core ✅
 
 The adoption mechanism: a real, drop-in-compatible Redis cache.
 
@@ -22,9 +22,10 @@ The adoption mechanism: a real, drop-in-compatible Redis cache.
 for the full honest list): RESP3, Lua scripting, replication/cluster,
 persistence (RDB/AOF), bitmaps, streams, geo commands.
 
-## Phase 2 — Semantic & Prompt-Aware Caching *(planned)*
+## Phase 2 — Semantic & Prompt-Aware Caching ✅
 
-- Embedding-provider abstraction (pluggable: OpenAI, local models, etc.)
+- Embedding-provider abstraction (pluggable: `mock` for local dev/testing,
+  `openai` for real embeddings)
 - `CACHE.SEMANTIC` — cache LLM answers keyed by embedding similarity, not
   exact string
 - `CACHE.PROMPT` — key by (prompt template + variables + model version);

@@ -11,6 +11,8 @@ hard-coded) value.
 | `--port` | `CACHEPOT_PORT` | `6380` | TCP port the RESP server listens on |
 | `--password` | `CACHEPOT_PASSWORD` | *(empty — no auth required)* | Required `AUTH` password; empty means no authentication, matching Redis's own default |
 | `--max-connections` | `CACHEPOT_MAX_CONNECTIONS` | `10000` | Maximum number of concurrent client connections; connections beyond this are rejected with a clean error and the socket is closed |
+| `--embed-provider` | `CACHEPOT_EMBED_PROVIDER` | `mock` | Embedding provider backing `CACHE.SEMANTIC`: `mock` (deterministic, dependency-free, for local dev/testing) or `openai` |
+| `--openai-api-key` | `OPENAI_API_KEY` | *(none)* | Required when `--embed-provider openai` is selected; startup fails with a clear error if missing |
 
 ## Examples
 
@@ -44,6 +46,10 @@ export CACHEPOT_PORT=6380
 - If `--password` (or `CACHEPOT_PASSWORD`) is set, clients must issue
   `AUTH <password>` before running other commands. See
   [Connection commands](/commands/connection).
-- These three flags are the entire Phase 1 configuration surface — there is
-  no config file yet, and no per-workspace configuration (that's Phase 7's
-  multi-tenancy work; see the [roadmap](/roadmap/)).
+- The three connection flags are the entire Phase 1 configuration surface;
+  `--embed-provider`/`--openai-api-key` are Phase 2 additions for
+  [`CACHE.SEMANTIC`](/commands/semantic-cache). There is no config file yet,
+  and no per-workspace configuration (that's Phase 7's multi-tenancy work;
+  see the [roadmap](/roadmap/)).
+- `CACHE.PROMPT` and `TOOL.CACHE` don't use an embedding provider — they're
+  exact-match caches, so `--embed-provider` only affects `CACHE.SEMANTIC`.

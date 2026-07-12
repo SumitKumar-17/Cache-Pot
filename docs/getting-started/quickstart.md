@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks through connecting to a running Cache-Pot server and exercising
-the Phase 1 commands that are real today. See
+the Phase 1-2 commands that are real today. See
 [Installation](/getting-started/installation) if you don't have a server
 running yet.
 
@@ -79,7 +79,26 @@ Any other RESP2 client (redis-py, ioredis, jedis, node-redis, etc.) works the
 same way — point it at Cache-Pot's host/port instead of Redis's.
 
 See the [command reference](/commands/) for the full list of what's
-implemented in Phase 1.
+implemented in Phase 1-2.
+
+## Semantic and prompt caching (Phase 2)
+
+These run against the default `mock` embedding provider out of the box — see
+[configuration](/getting-started/configuration) to switch to `openai` for
+real embeddings.
+
+```bash
+redis-cli -p 6380 CACHE.SEMANTIC SET "What is Kubernetes?" "K8s is a container orchestrator." MODEL gpt-4
+redis-cli -p 6380 CACHE.SEMANTIC GET "what is k8s?" MODEL gpt-4
+# "K8s is a container orchestrator."   (matched by meaning, not exact string)
+
+redis-cli -p 6380 TOOL.CACHE SET github.getIssue '{"repo":"cache-pot","issue":42}' '{"title":"..."}' TTL 300
+redis-cli -p 6380 TOOL.CACHE GET github.getIssue '{"issue":42,"repo":"cache-pot"}'
+# '{"title":"..."}'   (key order in the JSON doesn't matter)
+```
+
+See the [semantic cache](/commands/semantic-cache) and
+[tool cache](/commands/tool-cache) pages for the full command syntax.
 
 ## A look ahead: agent memory
 
@@ -95,7 +114,7 @@ MEMORY.SEARCH agent:research-bot "how does this user like answers formatted?"
 ::: info Planned — Phase 4
 `MEMORY.PUT` / `MEMORY.GET` / `MEMORY.SEARCH` and `AGENT.REMEMBER` /
 `AGENT.RECALL` are designed but not implemented yet. Running them against a
-Phase 1 server today will fail with an unknown-command error. See the
+Phase 1-2 server today will fail with an unknown-command error. See the
 [roadmap](/roadmap/) and [memory commands](/commands/memory) page for
 details.
 :::

@@ -404,23 +404,23 @@
   status: real
   summary: Forget all watched keys
 
-# --- Phase 2: semantic cache, prompt cache, tool cache (status: planned) --
+# --- Phase 2: semantic cache, prompt cache, tool cache (status: real) -----
 
 - name: CACHE.SEMANTIC
   category: semantic-cache
   phase: 2
-  status: planned
-  summary: Semantic-similarity cache lookup for LLM responses
+  status: real
+  summary: SET/GET an LLM response by embedding-similarity match, partitioned by model and temperature
 - name: CACHE.PROMPT
   category: semantic-cache
   phase: 2
-  status: planned
-  summary: Store/retrieve a prompt+response pair for semantic cache lookup
+  status: real
+  summary: SET/GET a response by an exact (template, variables, model) key
 - name: TOOL.CACHE
   category: tool-cache
   phase: 2
-  status: planned
-  summary: Cache the result of an agent tool/function call by arguments
+  status: real
+  summary: SET/GET a tool-call result by tool name and canonicalized arguments
 
 # --- Phase 3: vector search + MCP server (status: planned) ---------------
 

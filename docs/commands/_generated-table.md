@@ -80,9 +80,9 @@
 | `DISCARD` | transactions | 1 | ✅ Real | Discard all commands queued since MULTI |
 | `WATCH` | transactions | 1 | ✅ Real | Watch keys, aborting a subsequent EXEC if any changed |
 | `UNWATCH` | transactions | 1 | ✅ Real | Forget all watched keys |
-| `CACHE.SEMANTIC` | semantic-cache | 2 | 🔶 Planned | Semantic-similarity cache lookup for LLM responses |
-| `CACHE.PROMPT` | semantic-cache | 2 | 🔶 Planned | Store/retrieve a prompt+response pair for semantic cache lookup |
-| `TOOL.CACHE` | tool-cache | 2 | 🔶 Planned | Cache the result of an agent tool/function call by arguments |
+| `CACHE.SEMANTIC` | semantic-cache | 2 | ✅ Real | SET/GET an LLM response by embedding-similarity match, partitioned by model and temperature |
+| `CACHE.PROMPT` | semantic-cache | 2 | ✅ Real | SET/GET a response by an exact (template, variables, model) key |
+| `TOOL.CACHE` | tool-cache | 2 | ✅ Real | SET/GET a tool-call result by tool name and canonicalized arguments |
 | `VECTOR.UPSERT` | vector | 3 | 🔶 Planned | Insert or update a vector embedding in a named index |
 | `VECTOR.SEARCH` | vector | 3 | 🔶 Planned | Nearest-neighbor search over a vector index |
 | `VECTOR.DELETE` | vector | 3 | 🔶 Planned | Delete a vector from a named index |
@@ -95,4 +95,4 @@
 | `GRAPH.RELATED` | knowledge-graph | 6 | 🔶 Planned | Find entities/memories related to a given node in the knowledge graph |
 | `MEMORY.HISTORY` | versioning | 7 | 🔶 Planned | Fetch the version history of a memory item |
 
-*91 commands total: 77 real (Phase 1), 14 planned (Phases 2-7). Generated from `api/commands.yaml`.*
+*91 commands total: 80 real, 11 planned. Generated from `api/commands.yaml`.*

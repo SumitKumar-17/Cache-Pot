@@ -6,9 +6,9 @@ generated directly from [`api/commands.yaml`](https://github.com/SumitKumar-17/c
 the single source of truth for the command surface, so it can't silently
 drift out of sync with that file.
 
-- **✅ Real** — implemented today, in Phase 1.
+- **✅ Real** — implemented today, in Phase 1 or Phase 2.
 - **🔶 Planned** — designed and scoped in the [roadmap](/roadmap/), not yet
-  implemented. Running a planned command against a Phase 1 server will fail
+  implemented. Running a planned command against a Phase 1-2 server will fail
   with an unknown-command error.
 
 For narrative, per-category documentation (with examples), see:
@@ -21,8 +21,8 @@ For narrative, per-category documentation (with examples), see:
 - [Sets](/commands/sets) — real, Phase 1
 - [Sorted Sets](/commands/sorted-sets) — real, Phase 1
 - [Pub/Sub & Transactions](/commands/pubsub-and-transactions) — real, Phase 1
-- [Semantic Cache](/commands/semantic-cache) — planned, Phase 2
-- [Tool Cache](/commands/tool-cache) — planned, Phase 2
+- [Semantic Cache](/commands/semantic-cache) — real, Phase 2
+- [Tool Cache](/commands/tool-cache) — real, Phase 2
 - [Vector Search](/commands/vector) — planned, Phase 3
 - [Agent Memory](/commands/memory) — planned, Phase 4
 - [Knowledge Graph](/commands/graph) — planned, Phase 6
