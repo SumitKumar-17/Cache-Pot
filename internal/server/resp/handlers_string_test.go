@@ -10,6 +10,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/storage/memstore"
+	"github.com/SumitKumar-17/cache-pot/internal/toolcache"
 )
 
 func newTestDeps(t *testing.T) *Deps {
@@ -27,6 +28,7 @@ func newTestDeps(t *testing.T) *Deps {
 		Registry:      registry,
 		SemanticCache: semantic.New(embed.NewMock(8)),
 		PromptCache:   semantic.NewPromptCache(),
+		ToolCache:     toolcache.New(),
 	}
 }
 

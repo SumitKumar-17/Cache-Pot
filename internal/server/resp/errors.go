@@ -51,6 +51,10 @@ const ErrNoSuchKeyMsg = "ERR no such key"
 // variables_json argument is not valid JSON.
 const ErrInvalidJSONMsg = "ERR invalid variables JSON"
 
+// ErrInvalidToolArgsJSONMsg is returned by TOOL.CACHE SET/GET when the
+// supplied args_json argument is not valid JSON.
+const ErrInvalidToolArgsJSONMsg = "ERR invalid args JSON"
+
 // ErrUnknownCommand formats Redis's unknown-command error, including a
 // preview of the offending arguments.
 func ErrUnknownCommand(name string, args []string) string {

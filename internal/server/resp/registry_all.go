@@ -13,4 +13,5 @@ func RegisterAll(r *Registry) {
 	RegisterPubSub(r)
 	RegisterTx(r)
 	RegisterSemantic(r)
+	RegisterToolCache(r)
 }
