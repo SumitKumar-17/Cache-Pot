@@ -90,21 +90,38 @@ func parseConfig() server.Config {
 		}
 	}
 
+	// password and openAIAPIKey are secrets: their flag defaults are left
+	// empty (NOT envPassword/envOpenAIAPIKey) so `--help` never prints a
+	// real credential pulled from the environment or a loaded .env file —
+	// flag's help output always includes each flag's default value, and a
+	// secret default would leak into terminal scrollback, screenshots, CI
+	// logs, etc. The env-var fallback is applied manually after
+	// flag.Parse() instead, preserving the usual flag > env > default
+	// precedence without ever making the secret visible in --help.
 	port := flag.Int("port", envPort, "TCP port to listen on (env CACHEPOT_PORT)")
-	password := flag.String("password", envPassword, "required AUTH password; empty means no auth (env CACHEPOT_PASSWORD)")
+	password := flag.String("password", "", "required AUTH password; empty means no auth (env CACHEPOT_PASSWORD)")
 	maxConns := flag.Int("max-connections", envMaxConns, "maximum concurrent client connections (env CACHEPOT_MAX_CONNECTIONS)")
 	embedProvider := flag.String("embed-provider", envEmbedProvider, `text-embedding backend for CACHE.SEMANTIC: "mock" or "openai" (env CACHEPOT_EMBED_PROVIDER)`)
-	openAIAPIKey := flag.String("openai-api-key", envOpenAIAPIKey, "OpenAI API key, required when --embed-provider=openai (env OPENAI_API_KEY)")
+	openAIAPIKey := flag.String("openai-api-key", "", "OpenAI API key, required when --embed-provider=openai (env OPENAI_API_KEY)")
 	openAIAPIBase := flag.String("openai-api-base", envOpenAIAPIBase, `OpenAI-compatible API base URL, defaults to OpenAI's own API (env OPENAI_API_BASE)`)
 	mcpPort := flag.Int("mcp-port", envMCPPort, "TCP port for the native MCP (Model Context Protocol) HTTP server; 0 disables it (env CACHEPOT_MCP_PORT)")
 	flag.Parse()
 
+	resolvedPassword := *password
+	if resolvedPassword == "" {
+		resolvedPassword = envPassword
+	}
+	resolvedOpenAIAPIKey := *openAIAPIKey
+	if resolvedOpenAIAPIKey == "" {
+		resolvedOpenAIAPIKey = envOpenAIAPIKey
+	}
+
 	return server.Config{
 		Port:           *port,
-		Password:       *password,
+		Password:       resolvedPassword,
 		MaxConnections: *maxConns,
 		EmbedProvider:  *embedProvider,
-		OpenAIAPIKey:   *openAIAPIKey,
+		OpenAIAPIKey:   resolvedOpenAIAPIKey,
 		OpenAIAPIBase:  *openAIAPIBase,
 		MCPPort:        *mcpPort,
 	}
