@@ -32,9 +32,20 @@ CACHE.SEMANTIC GET <prompt> [MODEL <model>] [TEMP <temperature>] [THRESHOLD <flo
 
 ```bash
 redis-cli -p 6380 CACHE.SEMANTIC SET "What is Kubernetes?" "K8s is a container orchestrator." MODEL gpt-4
-redis-cli -p 6380 CACHE.SEMANTIC GET "what is k8s?" MODEL gpt-4
-# -> "K8s is a container orchestrator."
+redis-cli -p 6380 CACHE.SEMANTIC GET "What is kubernetes?" MODEL gpt-4
+# -> "K8s is a container orchestrator."  (case-only difference, well above 0.85)
 ```
+
+::: warning Tune THRESHOLD for real embeddings
+`0.85` reliably catches near-identical phrasing (case/whitespace differences) against
+real OpenAI embeddings. Substantial paraphrases — e.g. `"what is k8s?"` against
+`"What is Kubernetes?"` — can score meaningfully lower (verified directly against the
+OpenAI API; that pair misses at `0.85` but hits around `0.5-0.7` depending on the
+model). The right threshold is workload-dependent: start around `0.75` and tune from
+there, rather than assuming `0.85` is universally correct. The dependency-free `mock`
+provider does not reproduce this — it's tuned to keep worded-differently duplicates
+close together, so don't use it to calibrate a real threshold.
+:::
 
 ## CACHE.PROMPT
 

@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
-// openAIEmbeddingsURL is OpenAI's embeddings endpoint.
-const openAIEmbeddingsURL = "https://api.openai.com/v1/embeddings"
+// defaultOpenAIAPIBase is OpenAI's own API base URL, used when NewOpenAI is
+// called with an empty baseURL.
+const defaultOpenAIAPIBase = "https://api.openai.com/v1"
 
 // defaultOpenAIModel is used when NewOpenAI is called with an empty model.
 const defaultOpenAIModel = "text-embedding-3-small"
@@ -31,22 +33,30 @@ type openAIProvider struct {
 	baseURL string
 }
 
-// NewOpenAI constructs a Provider backed by OpenAI's embeddings API. apiKey
-// is sent as a Bearer token on every request. If model is empty, it
-// defaults to "text-embedding-3-small" (1536 dimensions). Other known
-// OpenAI embedding models are recognized for the purpose of reporting
+// NewOpenAI constructs a Provider backed by an OpenAI-compatible embeddings
+// API. apiKey is sent as a Bearer token on every request. If model is
+// empty, it defaults to "text-embedding-3-small" (1536 dimensions). Other
+// known OpenAI embedding models are recognized for the purpose of reporting
 // Dimensions(); unrecognized models default to 1536 dimensions, which
 // callers should override expectations for if using a nonstandard model.
-func NewOpenAI(apiKey, model string) Provider {
+//
+// baseURL is the API base (e.g. "https://api.openai.com/v1"), without the
+// "/embeddings" suffix — an empty baseURL defaults to OpenAI's own API.
+// Overriding it points Cache-Pot at any OpenAI-compatible endpoint (an
+// Azure OpenAI deployment, a self-hosted gateway, etc.) instead.
+func NewOpenAI(apiKey, model, baseURL string) Provider {
 	if model == "" {
 		model = defaultOpenAIModel
+	}
+	if baseURL == "" {
+		baseURL = defaultOpenAIAPIBase
 	}
 	return &openAIProvider{
 		apiKey:  apiKey,
 		model:   model,
 		dims:    openAIModelDimensions(model),
 		client:  http.DefaultClient,
-		baseURL: openAIEmbeddingsURL,
+		baseURL: strings.TrimRight(baseURL, "/") + "/embeddings",
 	}
 }
 

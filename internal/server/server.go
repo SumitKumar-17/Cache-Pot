@@ -169,7 +169,7 @@ func buildEmbedProvider(cfg Config) (embed.Provider, error) {
 		if cfg.OpenAIAPIKey == "" {
 			return nil, fmt.Errorf("server: embed-provider=openai requires an OpenAI API key (--openai-api-key or OPENAI_API_KEY)")
 		}
-		return embed.NewOpenAI(cfg.OpenAIAPIKey, ""), nil
+		return embed.NewOpenAI(cfg.OpenAIAPIKey, "", cfg.OpenAIAPIBase), nil
 	default:
 		return nil, fmt.Errorf("server: unknown embed provider %q (want \"mock\" or \"openai\")", cfg.EmbedProvider)
 	}

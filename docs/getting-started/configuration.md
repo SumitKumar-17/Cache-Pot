@@ -13,6 +13,28 @@ hard-coded) value.
 | `--max-connections` | `CACHEPOT_MAX_CONNECTIONS` | `10000` | Maximum number of concurrent client connections; connections beyond this are rejected with a clean error and the socket is closed |
 | `--embed-provider` | `CACHEPOT_EMBED_PROVIDER` | `mock` | Embedding provider backing `CACHE.SEMANTIC`: `mock` (deterministic, dependency-free, for local dev/testing) or `openai` |
 | `--openai-api-key` | `OPENAI_API_KEY` | *(none)* | Required when `--embed-provider openai` is selected; startup fails with a clear error if missing |
+| `--openai-api-base` | `OPENAI_API_BASE` | `https://api.openai.com/v1` | Base URL for the OpenAI-compatible embeddings API; override to point at Azure OpenAI or another compatible gateway |
+
+## Loading config from a `.env` file
+
+`cachepotd` reads a `.env` file (if present in the current working directory) at
+startup and sets any variables it defines that aren't already present in the real
+environment — a real environment variable always takes precedence over `.env`. This is
+a minimal, dependency-free convenience loader (simple `KEY=VALUE` lines, no expansion,
+no multi-line values) — not a general `.env` spec implementation.
+
+```bash
+# .env
+OPENAI_API_KEY="sk-..."
+OPENAI_API_BASE=https://api.openai.com/v1
+```
+
+```bash
+./bin/cachepotd --embed-provider openai   # picks up OPENAI_API_KEY/OPENAI_API_BASE from .env
+```
+
+**`.env` is git-ignored — never commit it.** Treat any API key in it the same as you
+would any other credential.
 
 ## Examples
 

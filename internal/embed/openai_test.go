@@ -131,7 +131,7 @@ func TestOpenAIContextCancellation(t *testing.T) {
 }
 
 func TestOpenAINewProviderDefaults(t *testing.T) {
-	p := NewOpenAI("key", "")
+	p := NewOpenAI("key", "", "")
 	if p.Name() != "openai:text-embedding-3-small" {
 		t.Fatalf("Name() = %q, want default model name embedded", p.Name())
 	}
@@ -141,11 +141,31 @@ func TestOpenAINewProviderDefaults(t *testing.T) {
 }
 
 func TestOpenAINewProviderCustomModel(t *testing.T) {
-	p := NewOpenAI("key", "text-embedding-3-large")
+	p := NewOpenAI("key", "text-embedding-3-large", "")
 	if p.Dimensions() != 3072 {
 		t.Fatalf("Dimensions() = %d, want 3072 for text-embedding-3-large", p.Dimensions())
 	}
 	if p.Name() != "openai:text-embedding-3-large" {
 		t.Fatalf("Name() = %q, want openai:text-embedding-3-large", p.Name())
+	}
+}
+
+func TestOpenAINewProviderBaseURL(t *testing.T) {
+	cases := []struct {
+		name    string
+		baseURL string
+		want    string
+	}{
+		{"empty defaults to OpenAI", "", "https://api.openai.com/v1/embeddings"},
+		{"no trailing slash", "https://api.example.com/v1", "https://api.example.com/v1/embeddings"},
+		{"trailing slash trimmed", "https://api.example.com/v1/", "https://api.example.com/v1/embeddings"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := NewOpenAI("key", "", tc.baseURL).(*openAIProvider)
+			if p.baseURL != tc.want {
+				t.Fatalf("baseURL = %q, want %q", p.baseURL, tc.want)
+			}
+		})
 	}
 }

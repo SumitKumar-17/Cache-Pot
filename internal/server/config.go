@@ -31,6 +31,11 @@ type Config struct {
 	// OpenAIAPIKey is the API key used when EmbedProvider == "openai". It
 	// is an error to select "openai" without providing this.
 	OpenAIAPIKey string
+	// OpenAIAPIBase overrides the base URL used when EmbedProvider ==
+	// "openai" (default "https://api.openai.com/v1"). Set this to point
+	// at an OpenAI-compatible endpoint (an Azure OpenAI deployment, a
+	// self-hosted gateway, etc.) instead of OpenAI's own API.
+	OpenAIAPIBase string
 }
 
 const (
