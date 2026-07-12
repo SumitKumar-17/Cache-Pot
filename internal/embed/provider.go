@@ -1,13 +1,34 @@
-// Package embed is a Phase 2 skeleton: a pluggable text-embedding provider
-// seam used by internal/semantic (and later internal/vector /
-// internal/memory) to turn text into vectors. No implementation exists yet
-// in Phase 1.
+// Package embed provides a pluggable text-embedding provider abstraction
+// used by internal/semantic (Phase 2's semantic cache) and, later, by
+// internal/vector (Phase 3's vector store) to turn text into vectors.
+//
+// The Provider interface is intentionally small: implementations range from
+// a dependency-free deterministic mock (see mock.go, useful for tests and
+// offline/local dev) to real HTTP-backed providers such as OpenAI (see
+// openai.go). Callers should depend only on the Provider interface, never
+// on a concrete implementation type, so the backing embedding model can be
+// swapped without touching call sites.
 package embed
 
 import "context"
 
-// Provider embeds text into a vector. Concrete implementations (a local
-// model, an external API, etc.) arrive in Phase 2.
+// Provider turns text into a fixed-length vector embedding.
+//
+// Implementations must be safe for concurrent use by multiple goroutines.
 type Provider interface {
+	// Embed returns the embedding vector for a single piece of text.
 	Embed(ctx context.Context, text string) ([]float32, error)
+
+	// EmbedBatch returns the embedding vectors for multiple texts, in the
+	// same order as the input slice. Implementations that can't batch
+	// natively may simply call Embed in a loop.
+	EmbedBatch(ctx context.Context, texts []string) ([][]float32, error)
+
+	// Dimensions reports the length of the vectors this provider produces.
+	Dimensions() int
+
+	// Name identifies the provider (e.g. "mock", "openai:text-embedding-3-small"),
+	// useful for logging/metrics and for namespacing cached vectors by the
+	// model that produced them.
+	Name() string
 }
