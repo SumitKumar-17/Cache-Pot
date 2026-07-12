@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
+	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/storage/memstore"
 )
 
@@ -17,12 +19,14 @@ func newTestDeps(t *testing.T) *Deps {
 	registry := NewRegistry()
 	RegisterAll(registry)
 	return &Deps{
-		Engine:   engine,
-		Auth:     auth.New(""),
-		Metrics:  observability.NewMetrics(),
-		Logger:   observability.NewLogger(slog.LevelError),
-		PubSub:   NewPubSub(),
-		Registry: registry,
+		Engine:        engine,
+		Auth:          auth.New(""),
+		Metrics:       observability.NewMetrics(),
+		Logger:        observability.NewLogger(slog.LevelError),
+		PubSub:        NewPubSub(),
+		Registry:      registry,
+		SemanticCache: semantic.New(embed.NewMock(8)),
+		PromptCache:   semantic.NewPromptCache(),
 	}
 }
 

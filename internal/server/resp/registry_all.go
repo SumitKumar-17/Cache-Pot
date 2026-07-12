@@ -12,4 +12,5 @@ func RegisterAll(r *Registry) {
 	RegisterZSet(r)
 	RegisterPubSub(r)
 	RegisterTx(r)
+	RegisterSemantic(r)
 }

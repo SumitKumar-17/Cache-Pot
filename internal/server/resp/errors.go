@@ -47,6 +47,10 @@ const ErrWrongDBMsg = "ERR DB index is out of range"
 // missing source key).
 const ErrNoSuchKeyMsg = "ERR no such key"
 
+// ErrInvalidJSONMsg is returned by CACHE.PROMPT SET/GET when the supplied
+// variables_json argument is not valid JSON.
+const ErrInvalidJSONMsg = "ERR invalid variables JSON"
+
 // ErrUnknownCommand formats Redis's unknown-command error, including a
 // preview of the offending arguments.
 func ErrUnknownCommand(name string, args []string) string {

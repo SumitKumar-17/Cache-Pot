@@ -14,6 +14,23 @@ type Config struct {
 	// connections beyond this are rejected with a clean error reply and
 	// the socket is closed, rather than being allowed to degrade service.
 	MaxConnections int
+
+	// EmbedProvider selects the text-embedding backend that powers
+	// CACHE.SEMANTIC: "mock" (default) or "openai".
+	//
+	// "mock" uses internal/embed.NewMock, a deterministic,
+	// dependency-free provider intended for local dev/testing only — it
+	// does NOT produce semantically meaningful embeddings, only
+	// deterministic ones suitable for exercising the cache's plumbing
+	// (exact-duplicate hits, near-duplicate hits, unrelated misses). It
+	// is not suitable for production use.
+	//
+	// "openai" uses internal/embed.NewOpenAI against OpenAI's real
+	// embeddings API and requires OpenAIAPIKey to be set.
+	EmbedProvider string
+	// OpenAIAPIKey is the API key used when EmbedProvider == "openai". It
+	// is an error to select "openai" without providing this.
+	OpenAIAPIKey string
 }
 
 const (
@@ -21,6 +38,9 @@ const (
 	// doesn't collide with a real local Redis during development/testing.
 	DefaultPort           = 6380
 	DefaultMaxConnections = 10000
+	// DefaultEmbedProvider is "mock" so cachepotd runs out of the box
+	// with no external dependencies/API keys required.
+	DefaultEmbedProvider = "mock"
 )
 
 // DefaultConfig returns the Phase 1 default configuration (no auth
@@ -29,5 +49,6 @@ func DefaultConfig() Config {
 	return Config{
 		Port:           DefaultPort,
 		MaxConnections: DefaultMaxConnections,
+		EmbedProvider:  DefaultEmbedProvider,
 	}
 }

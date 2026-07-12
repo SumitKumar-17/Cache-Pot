@@ -7,6 +7,7 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
+	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/storage"
 )
 
@@ -26,6 +27,11 @@ type Deps struct {
 	Logger   *slog.Logger
 	PubSub   *PubSub
 	Registry *Registry
+
+	// SemanticCache backs CACHE.SEMANTIC (similarity-based LLM response
+	// cache); PromptCache backs CACHE.PROMPT (exact-match template cache).
+	SemanticCache *semantic.SemanticCache
+	PromptCache   *semantic.PromptCache
 }
 
 // ClientState is per-connection state: authentication, the selected

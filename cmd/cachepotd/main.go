@@ -40,15 +40,24 @@ func parseConfig() server.Config {
 			envMaxConns = n
 		}
 	}
+	envEmbedProvider := server.DefaultEmbedProvider
+	if v := os.Getenv("CACHEPOT_EMBED_PROVIDER"); v != "" {
+		envEmbedProvider = v
+	}
+	envOpenAIAPIKey := os.Getenv("OPENAI_API_KEY")
 
 	port := flag.Int("port", envPort, "TCP port to listen on (env CACHEPOT_PORT)")
 	password := flag.String("password", envPassword, "required AUTH password; empty means no auth (env CACHEPOT_PASSWORD)")
 	maxConns := flag.Int("max-connections", envMaxConns, "maximum concurrent client connections (env CACHEPOT_MAX_CONNECTIONS)")
+	embedProvider := flag.String("embed-provider", envEmbedProvider, `text-embedding backend for CACHE.SEMANTIC: "mock" or "openai" (env CACHEPOT_EMBED_PROVIDER)`)
+	openAIAPIKey := flag.String("openai-api-key", envOpenAIAPIKey, "OpenAI API key, required when --embed-provider=openai (env OPENAI_API_KEY)")
 	flag.Parse()
 
 	return server.Config{
 		Port:           *port,
 		Password:       *password,
 		MaxConnections: *maxConns,
+		EmbedProvider:  *embedProvider,
+		OpenAIAPIKey:   *openAIAPIKey,
 	}
 }

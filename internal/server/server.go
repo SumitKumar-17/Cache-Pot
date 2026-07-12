@@ -9,13 +9,16 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
+	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/server/resp"
 	"github.com/SumitKumar-17/cache-pot/internal/storage/memstore"
 )
@@ -63,16 +66,23 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	engine := memstore.New(32)
 	defer engine.Close()
 
+	provider, err := buildEmbedProvider(s.cfg)
+	if err != nil {
+		return err
+	}
+
 	registry := resp.NewRegistry()
 	resp.RegisterAll(registry)
 
 	s.deps = &resp.Deps{
-		Engine:   engine,
-		Auth:     auth.New(s.cfg.Password),
-		Metrics:  s.metrics,
-		Logger:   s.logger,
-		PubSub:   resp.NewPubSub(),
-		Registry: registry,
+		Engine:        engine,
+		Auth:          auth.New(s.cfg.Password),
+		Metrics:       s.metrics,
+		Logger:        s.logger,
+		PubSub:        resp.NewPubSub(),
+		Registry:      registry,
+		SemanticCache: semantic.New(provider),
+		PromptCache:   semantic.NewPromptCache(),
 	}
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())
@@ -138,4 +148,27 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 
 	s.logger.Info("cachepot stopped")
 	return nil
+}
+
+// buildEmbedProvider constructs the embed.Provider selected by
+// cfg.EmbedProvider ("mock" or "openai", case-insensitive; empty defaults
+// to "mock"). It returns an error at startup — rather than lazily at first
+// use — if "openai" is selected without an API key, or if EmbedProvider
+// names anything else, so misconfiguration is loud and immediate.
+func buildEmbedProvider(cfg Config) (embed.Provider, error) {
+	switch strings.ToLower(cfg.EmbedProvider) {
+	case "", "mock":
+		// mock is for local dev/testing only: it produces deterministic
+		// but NOT semantically meaningful embeddings, sufficient to
+		// exercise CACHE.SEMANTIC's matching logic offline but not
+		// suitable for production use.
+		return embed.NewMock(0), nil
+	case "openai":
+		if cfg.OpenAIAPIKey == "" {
+			return nil, fmt.Errorf("server: embed-provider=openai requires an OpenAI API key (--openai-api-key or OPENAI_API_KEY)")
+		}
+		return embed.NewOpenAI(cfg.OpenAIAPIKey, ""), nil
+	default:
+		return nil, fmt.Errorf("server: unknown embed provider %q (want \"mock\" or \"openai\")", cfg.EmbedProvider)
+	}
 }
