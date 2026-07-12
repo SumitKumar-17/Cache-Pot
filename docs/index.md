@@ -24,8 +24,8 @@ memory engine instead of four separate services.
 | Semantic/prompt/tool-call caching | | | partial | | ✅ |
 | Vector search | | ✅ | | | ✅ |
 | MCP-native tool access | | | | ✅ | ✅ |
-| Agent memory (semantic recall) | | | ✅ | | Planned ([Phase 4](/roadmap/)) |
-| Shared memory across agents/models | | | partial | | Planned ([Phase 4](/roadmap/)) |
+| Agent memory (semantic recall) | | | ✅ | | ✅ |
+| Shared memory across agents/models | | | partial | | ✅ |
 | Separate services to run & pay for | — | 2 | 3 | 4 | **1** |
 
 Cache-Pot's bet: these are not separate problems. They're one memory engine
@@ -46,19 +46,21 @@ See the full [installation](/getting-started/installation) and
 [quickstart](/getting-started/quickstart) guides for building from source and
 connecting with a client library.
 
-## Status: Phases 1-3
+## Status: Phases 1-4
 
 Cache-Pot is being built in seven phases (see the [roadmap](/roadmap/)).
-**Today, Phases 1, 2, and 3 are real.**
+**Today, Phases 1 through 4 are real.**
 
 - ✅ **Real today:** RESP2 protocol, pipelining, strings/hashes/lists/sets/sorted
   sets, TTL (active + passive expiry), transactions (`MULTI`/`EXEC`/`WATCH`),
   Pub/Sub (Phase 1) — `CACHE.SEMANTIC`, `CACHE.PROMPT`, and `TOOL.CACHE`
-  (Phase 2) — `VECTOR.UPSERT`/`SEARCH`/`DELETE` and a native
-  [MCP server](/getting-started/mcp-server) sharing the same memory (Phase 3).
-  See the [command reference](/commands/) for the exact list.
-- 🔶 **Designed, not built yet:** shared agent memory, memory versioning, a
-  knowledge graph, cost analytics, and multi-tenancy. These are scoped in the
+  (Phase 2) — `VECTOR.UPSERT`/`SEARCH`/`DELETE` (Phase 3) — `MEMORY.PUT`/`GET`/
+  `SEARCH` and `AGENT.REMEMBER`/`RECALL` (Phase 4) — plus a native
+  [MCP server](/getting-started/mcp-server) exposing all of the above as tools,
+  sharing the exact same memory. See the [command reference](/commands/) for
+  the exact list.
+- 🔶 **Designed, not built yet:** memory version history, a knowledge graph,
+  cost analytics, and multi-tenancy. These are scoped in the
   [roadmap](/roadmap/) but do not exist in the codebase today.
 
 Cache-Pot is also volatile, in-memory-only storage — there is no persistence

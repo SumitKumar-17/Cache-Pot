@@ -1,6 +1,6 @@
 # MCP Server
 
-::: tip Phase 3 — real
+::: tip Phases 3-4 — real
 Cache-Pot runs a native MCP (Model Context Protocol) server alongside its RESP
 listener, sharing the exact same in-memory state — no adapter layer.
 :::
@@ -10,9 +10,10 @@ listener, sharing the exact same in-memory state — no adapter layer.
 Agents built on Claude, GPT, or any other MCP-compatible client need a standard way to
 call `remember`/`recall`/`store_vector`/etc.-shaped tools. Instead of bolting an MCP
 adapter on top of the RESP protocol, Cache-Pot's MCP server calls directly into the same
-`SemanticCache`/`PromptCache`/`ToolCache`/`VectorStore` objects the RESP handlers use.
-A value written by an MCP tool call is immediately visible to a RESP client (and vice
-versa) — they're two protocols over one shared memory, not two separate systems.
+`SemanticCache`/`PromptCache`/`ToolCache`/`VectorStore`/`MemoryStore` objects the RESP
+handlers use. A value written by an MCP tool call is immediately visible to a RESP
+client (and vice versa) — they're two protocols over one shared memory, not two
+separate systems.
 
 ## Connecting
 
@@ -38,19 +39,21 @@ http://<host>:6381/
 | `store_vector` | `internal/vector.Store` | `VECTOR.UPSERT` |
 | `find_similar` | `internal/vector.Store` | `VECTOR.SEARCH` (pure vector search only — no `HYBRID`) |
 | `delete_vector` | `internal/vector.Store` | `VECTOR.DELETE` |
+| `remember` | `internal/memory.Store` | `AGENT.REMEMBER` |
+| `recall` | `internal/memory.Store` | `AGENT.RECALL` (always scoped to the calling `agent_id`, same no-cross-agent-leak guarantee) |
 
-Each tool's defaults (model, temperature, similarity threshold, etc.) mirror its RESP
-command counterpart exactly — see the [command reference](/commands/) for those
-defaults, and each tool's own MCP schema/description for its exact fields.
+Each tool's defaults (model, temperature, similarity threshold, memory kind, etc.)
+mirror its RESP command counterpart exactly — see the [command reference](/commands/)
+for those defaults, and each tool's own MCP schema/description for its exact fields.
 
-::: warning What's deliberately NOT exposed
-The original vision described `remember`/`recall`/`search` (generic memory search) and
-`summarize` MCP tools. Those map to [Phase 4](/roadmap/)
-(agent memory) and [Phase 6](/roadmap/)
-(consolidation), which aren't implemented yet — `internal/memory` and
-`internal/consolidate` are still empty skeletons. Exposing those tool names now would
-mean an MCP client calling `remember` and getting something that isn't real agent
-memory. They'll be added once Phases 4 and 6 land for real.
+::: warning What's still NOT exposed
+The original vision also described a generic `search` (cross-memory search, not
+scoped to one agent) and a `summarize` MCP tool. `search` is available as
+`MEMORY.SEARCH` over RESP but isn't yet exposed as its own MCP tool (only the
+always-agent-scoped `recall` is, for now). `summarize` maps to
+[Phase 6](/roadmap/) (consolidation), which isn't implemented yet —
+`internal/consolidate` is still an empty skeleton. Exposing `summarize` now would mean
+an MCP client calling it and getting something that isn't real consolidation.
 :::
 
 ## Example
@@ -65,6 +68,10 @@ call find_similar       { namespace: "docs", vector: [1,0,0], k: 5 }
 call cache_semantic_set { prompt: "What is Kubernetes?", response: "K8s is a container orchestrator." }
 call cache_semantic_get { prompt: "What is Kubernetes?" }
 # -> "K8s is a container orchestrator."
+
+call remember { agent_id: "research-bot", content: "User prefers concise, bullet-point summaries" }
+call recall   { agent_id: "research-bot", query: "how does this user like answers formatted?" }
+# -> [{ id: "...", score: 0.9x }]
 ```
 
 See [`internal/mcp`](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/mcp)

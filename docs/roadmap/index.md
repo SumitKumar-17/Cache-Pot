@@ -44,22 +44,28 @@ See the [semantic cache](/commands/semantic-cache) and
 - A native MCP server (streamable HTTP, `--mcp-port`) exposing
   `cache_semantic_set/get`, `cache_prompt_set/get`, `tool_cache_set/get`,
   `store_vector`, `find_similar`, and `delete_vector` directly against the
-  same shared engine — no adapter layer. `remember`/`recall`/`summarize`
-  from the original vision are intentionally **not** exposed yet: they need
-  Phase 4/6 machinery that doesn't exist, and faking them would violate the
-  project's own honesty policy.
+  same shared engine — no adapter layer. `summarize` from the original
+  vision is intentionally **not** exposed yet: it needs Phase 6
+  consolidation machinery that doesn't exist, and faking it would violate
+  the project's own honesty policy. `remember`/`recall` are now real, added
+  alongside Phase 4 below.
 
 See the [vector commands](/commands/vector) and
 [MCP server](/getting-started/mcp-server) pages.
 
-## Phase 4 — Agent Memory + Shared Memory *(planned)*
+## Phase 4 — Agent Memory + Shared Memory ✅
 
 - Real memory domain layer: short-term, long-term, episodic, and semantic
-  memory kinds
+  memory kinds, indexed via the Phase 3 vector store for semantic search
 - `MEMORY.PUT` / `MEMORY.GET` / `MEMORY.SEARCH`, `AGENT.REMEMBER` /
-  `AGENT.RECALL`
+  `AGENT.RECALL`, plus `remember`/`recall` MCP tools
 - Shared memory across agents and models (Claude, GPT, Gemini, Cursor, etc.)
-  via agent/workspace metadata — no artificial per-client silos
+  via agent/workspace metadata — no artificial per-client silos:
+  `MEMORY.SEARCH` with no `AGENT` filter searches every agent's memories in a
+  workspace
+- Version is bumped on every `MEMORY.PUT` to the same id, but full version
+  history retrieval is deliberately not built here — that's Phase 7's
+  `MEMORY.HISTORY`
 
 See the [agent memory commands](/commands/memory) page.
 

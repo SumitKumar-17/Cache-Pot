@@ -1,13 +1,13 @@
 # Contributing
 
-Cache-Pot is early — Phases 1-3 (see [ROADMAP.md](ROADMAP.md)) are done: the
-Redis-compatible core, semantic/prompt/tool caching, a native vector store, and a
-native MCP server. Contributions are welcome, especially:
+Cache-Pot is early — Phases 1-4 (see [ROADMAP.md](ROADMAP.md)) are done: the
+Redis-compatible core, semantic/prompt/tool caching, a native vector store, shared
+agent memory, and a native MCP server. Contributions are welcome, especially:
 
 - Redis error-string compatibility fixes and Phase 1 command coverage gaps
 - Test coverage (unit tests per command, integration tests against real clients)
 - Documentation fixes in `docs/`
-- Phase 4 groundwork (agent memory + shared memory — see the roadmap)
+- Phase 5 groundwork (observability, cost analytics, smarter eviction — see the roadmap)
 
 ## Development
 

@@ -44,7 +44,7 @@ export default defineConfig({
           { text: "Semantic Cache", link: "/commands/semantic-cache" },
           { text: "Tool Cache", link: "/commands/tool-cache" },
           { text: "Vector Search", link: "/commands/vector" },
-          { text: "Agent Memory (Planned)", link: "/commands/memory" },
+          { text: "Agent Memory", link: "/commands/memory" },
           { text: "Knowledge Graph (Planned)", link: "/commands/graph" },
           { text: "Versioning (Planned)", link: "/commands/versioning" },
         ],

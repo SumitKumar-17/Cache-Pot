@@ -440,33 +440,33 @@
   status: real
   summary: Delete a vector by id from a namespace
 
-# --- Phase 4: shared agent memory (status: planned) -----------------------
+# --- Phase 4: shared agent memory (status: real) --------------------------
 
 - name: MEMORY.PUT
   category: agent-memory
   phase: 4
-  status: planned
-  summary: Store a memory item for an agent/workspace
+  status: real
+  summary: Store a memory item for an agent in a workspace, embedded for later semantic search
 - name: MEMORY.GET
   category: agent-memory
   phase: 4
-  status: planned
-  summary: Retrieve a memory item by ID
+  status: real
+  summary: Retrieve a memory item by id
 - name: MEMORY.SEARCH
   category: agent-memory
   phase: 4
-  status: planned
-  summary: Semantic/metadata search over an agent's memories
+  status: real
+  summary: Semantic search over a workspace's memories, across all agents unless AGENT-filtered
 - name: AGENT.REMEMBER
   category: agent-memory
   phase: 4
-  status: planned
+  status: real
   summary: High-level helper to store an agent memory from raw content
 - name: AGENT.RECALL
   category: agent-memory
   phase: 4
-  status: planned
-  summary: High-level helper to recall relevant agent memories for a prompt
+  status: real
+  summary: High-level helper to recall only this agent's own memories relevant to a query
 
 # --- Phase 6: consolidation + knowledge graph (status: planned) -----------
 

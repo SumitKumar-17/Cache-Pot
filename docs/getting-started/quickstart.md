@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks through connecting to a running Cache-Pot server and exercising
-the Phase 1-3 commands that are real today. See
+the Phase 1-4 commands that are real today. See
 [Installation](/getting-started/installation) if you don't have a server
 running yet.
 
@@ -79,7 +79,7 @@ Any other RESP2 client (redis-py, ioredis, jedis, node-redis, etc.) works the
 same way — point it at Cache-Pot's host/port instead of Redis's.
 
 See the [command reference](/commands/) for the full list of what's
-implemented in Phase 1-3.
+implemented in Phase 1-4.
 
 ## Semantic and prompt caching (Phase 2)
 
@@ -119,21 +119,28 @@ exact same in-memory state as the RESP commands above. See the
 
 See the [vector commands](/commands/vector) page for the full command syntax.
 
-## A look ahead: agent memory
+## Shared agent memory (Phase 4)
 
-Cache-Pot's actual pitch beyond "Redis clone" is shared, semantic memory for
-agents. That doesn't exist yet, but here's the shape of what it will look
-like once Phase 4 lands:
+Cache-Pot's actual pitch beyond "Redis clone" is shared, semantic memory for agents —
+and it's real now:
 
 ```bash
-MEMORY.PUT agent:research-bot "User prefers concise, bullet-point summaries"
-MEMORY.SEARCH agent:research-bot "how does this user like answers formatted?"
+redis-cli -p 6380 AGENT.REMEMBER research-bot "User prefers concise, bullet-point summaries"
+redis-cli -p 6380 AGENT.RECALL research-bot "how does this user like answers formatted?"
+# -> the memory above, ranked by semantic similarity
+
+# no AGENT filter searches EVERY agent's memories in the workspace — shared, not siloed:
+redis-cli -p 6380 MEMORY.SEARCH default "how does this user like answers formatted?"
 ```
 
-::: info Planned — Phase 4
-`MEMORY.PUT` / `MEMORY.GET` / `MEMORY.SEARCH` and `AGENT.REMEMBER` /
-`AGENT.RECALL` are designed but not implemented yet. Running them against a
-Phase 1-3 server today will fail with an unknown-command error. See the
-[roadmap](/roadmap/) and [memory commands](/commands/memory) page for
-details.
+`remember`/`recall` are also available as MCP tools — see the
+[MCP server](/getting-started/mcp-server) page.
+
+See the [agent memory commands](/commands/memory) page for the full command syntax,
+including `MEMORY.PUT`/`GET` for direct control over memory ids, kinds, and metadata.
+
+::: info Planned — Phase 6
+Automatic nightly consolidation (deduping and summarizing accumulated memories into a
+knowledge graph) isn't built yet — today's memories accumulate as-is. See the
+[roadmap](/roadmap/).
 :::

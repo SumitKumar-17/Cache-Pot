@@ -86,13 +86,13 @@
 | `VECTOR.UPSERT` | vector | 3 | ✅ Real | Insert or update a vector embedding (plus optional metadata/text) in a namespace |
 | `VECTOR.SEARCH` | vector | 3 | ✅ Real | Nearest-neighbor search over a namespace, with metric/filter/hybrid options |
 | `VECTOR.DELETE` | vector | 3 | ✅ Real | Delete a vector by id from a namespace |
-| `MEMORY.PUT` | agent-memory | 4 | 🔶 Planned | Store a memory item for an agent/workspace |
-| `MEMORY.GET` | agent-memory | 4 | 🔶 Planned | Retrieve a memory item by ID |
-| `MEMORY.SEARCH` | agent-memory | 4 | 🔶 Planned | Semantic/metadata search over an agent's memories |
-| `AGENT.REMEMBER` | agent-memory | 4 | 🔶 Planned | High-level helper to store an agent memory from raw content |
-| `AGENT.RECALL` | agent-memory | 4 | 🔶 Planned | High-level helper to recall relevant agent memories for a prompt |
+| `MEMORY.PUT` | agent-memory | 4 | ✅ Real | Store a memory item for an agent in a workspace, embedded for later semantic search |
+| `MEMORY.GET` | agent-memory | 4 | ✅ Real | Retrieve a memory item by id |
+| `MEMORY.SEARCH` | agent-memory | 4 | ✅ Real | Semantic search over a workspace's memories, across all agents unless AGENT-filtered |
+| `AGENT.REMEMBER` | agent-memory | 4 | ✅ Real | High-level helper to store an agent memory from raw content |
+| `AGENT.RECALL` | agent-memory | 4 | ✅ Real | High-level helper to recall only this agent's own memories relevant to a query |
 | `SUMMARY.CREATE` | consolidation | 6 | 🔶 Planned | Consolidate accumulated episodic memories into a summary |
 | `GRAPH.RELATED` | knowledge-graph | 6 | 🔶 Planned | Find entities/memories related to a given node in the knowledge graph |
 | `MEMORY.HISTORY` | versioning | 7 | 🔶 Planned | Fetch the version history of a memory item |
 
-*91 commands total: 83 real, 8 planned. Generated from `api/commands.yaml`.*
+*91 commands total: 88 real, 3 planned. Generated from `api/commands.yaml`.*
