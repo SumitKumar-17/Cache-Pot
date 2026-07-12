@@ -83,9 +83,9 @@
 | `CACHE.SEMANTIC` | semantic-cache | 2 | ✅ Real | SET/GET an LLM response by embedding-similarity match, partitioned by model and temperature |
 | `CACHE.PROMPT` | semantic-cache | 2 | ✅ Real | SET/GET a response by an exact (template, variables, model) key |
 | `TOOL.CACHE` | tool-cache | 2 | ✅ Real | SET/GET a tool-call result by tool name and canonicalized arguments |
-| `VECTOR.UPSERT` | vector | 3 | 🔶 Planned | Insert or update a vector embedding in a named index |
-| `VECTOR.SEARCH` | vector | 3 | 🔶 Planned | Nearest-neighbor search over a vector index |
-| `VECTOR.DELETE` | vector | 3 | 🔶 Planned | Delete a vector from a named index |
+| `VECTOR.UPSERT` | vector | 3 | ✅ Real | Insert or update a vector embedding (plus optional metadata/text) in a namespace |
+| `VECTOR.SEARCH` | vector | 3 | ✅ Real | Nearest-neighbor search over a namespace, with metric/filter/hybrid options |
+| `VECTOR.DELETE` | vector | 3 | ✅ Real | Delete a vector by id from a namespace |
 | `MEMORY.PUT` | agent-memory | 4 | 🔶 Planned | Store a memory item for an agent/workspace |
 | `MEMORY.GET` | agent-memory | 4 | 🔶 Planned | Retrieve a memory item by ID |
 | `MEMORY.SEARCH` | agent-memory | 4 | 🔶 Planned | Semantic/metadata search over an agent's memories |
@@ -95,4 +95,4 @@
 | `GRAPH.RELATED` | knowledge-graph | 6 | 🔶 Planned | Find entities/memories related to a given node in the knowledge graph |
 | `MEMORY.HISTORY` | versioning | 7 | 🔶 Planned | Fetch the version history of a memory item |
 
-*91 commands total: 80 real, 11 planned. Generated from `api/commands.yaml`.*
+*91 commands total: 83 real, 8 planned. Generated from `api/commands.yaml`.*

@@ -14,6 +14,7 @@ hard-coded) value.
 | `--embed-provider` | `CACHEPOT_EMBED_PROVIDER` | `mock` | Embedding provider backing `CACHE.SEMANTIC`: `mock` (deterministic, dependency-free, for local dev/testing) or `openai` |
 | `--openai-api-key` | `OPENAI_API_KEY` | *(none)* | Required when `--embed-provider openai` is selected; startup fails with a clear error if missing |
 | `--openai-api-base` | `OPENAI_API_BASE` | `https://api.openai.com/v1` | Base URL for the OpenAI-compatible embeddings API; override to point at Azure OpenAI or another compatible gateway |
+| `--mcp-port` | `CACHEPOT_MCP_PORT` | `6381` | TCP port for the native [MCP server](/getting-started/mcp-server); `0` disables it |
 
 ## Loading config from a `.env` file
 
@@ -69,9 +70,10 @@ export CACHEPOT_PORT=6380
   `AUTH <password>` before running other commands. See
   [Connection commands](/commands/connection).
 - The three connection flags are the entire Phase 1 configuration surface;
-  `--embed-provider`/`--openai-api-key` are Phase 2 additions for
-  [`CACHE.SEMANTIC`](/commands/semantic-cache). There is no config file yet,
-  and no per-workspace configuration (that's Phase 7's multi-tenancy work;
-  see the [roadmap](/roadmap/)).
+  `--embed-provider`/`--openai-api-key`/`--openai-api-base` are Phase 2 additions for
+  [`CACHE.SEMANTIC`](/commands/semantic-cache), and `--mcp-port` is a Phase 3 addition
+  for the [MCP server](/getting-started/mcp-server). There is no config file yet, and
+  no per-workspace configuration (that's Phase 7's multi-tenancy work; see the
+  [roadmap](/roadmap/)).
 - `CACHE.PROMPT` and `TOOL.CACHE` don't use an embedding provider — they're
   exact-match caches, so `--embed-provider` only affects `CACHE.SEMANTIC`.

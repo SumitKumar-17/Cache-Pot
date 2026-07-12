@@ -22,10 +22,10 @@ memory engine instead of four separate services.
 |---|---|---|---|---|---|
 | Fast KV cache | ✅ | | | | ✅ |
 | Semantic/prompt/tool-call caching | | | partial | | ✅ |
-| Vector search | | ✅ | | | Planned ([Phase 3](/roadmap/#phase-3-—-native-vector-store-mcp-server-planned)) |
-| Agent memory (semantic recall) | | | ✅ | | Planned ([Phase 4](/roadmap/#phase-4-—-agent-memory-shared-memory-planned)) |
-| Shared memory across agents/models | | | partial | | Planned ([Phase 4](/roadmap/#phase-4-—-agent-memory-shared-memory-planned)) |
-| MCP-native tool access | | | | ✅ | Planned ([Phase 3](/roadmap/#phase-3-—-native-vector-store-mcp-server-planned)) |
+| Vector search | | ✅ | | | ✅ |
+| MCP-native tool access | | | | ✅ | ✅ |
+| Agent memory (semantic recall) | | | ✅ | | Planned ([Phase 4](/roadmap/)) |
+| Shared memory across agents/models | | | partial | | Planned ([Phase 4](/roadmap/)) |
 | Separate services to run & pay for | — | 2 | 3 | 4 | **1** |
 
 Cache-Pot's bet: these are not separate problems. They're one memory engine
@@ -46,19 +46,20 @@ See the full [installation](/getting-started/installation) and
 [quickstart](/getting-started/quickstart) guides for building from source and
 connecting with a client library.
 
-## Status: Phases 1-2
+## Status: Phases 1-3
 
 Cache-Pot is being built in seven phases (see the [roadmap](/roadmap/)).
-**Today, Phases 1 and 2 are real.**
+**Today, Phases 1, 2, and 3 are real.**
 
 - ✅ **Real today:** RESP2 protocol, pipelining, strings/hashes/lists/sets/sorted
   sets, TTL (active + passive expiry), transactions (`MULTI`/`EXEC`/`WATCH`),
-  Pub/Sub (Phase 1) — plus `CACHE.SEMANTIC`, `CACHE.PROMPT`, and `TOOL.CACHE`
-  (Phase 2). See the [command reference](/commands/) for the exact list.
-- 🔶 **Designed, not built yet:** native vector search, shared agent memory, a
-  native MCP server, memory versioning, a knowledge graph, cost analytics, and
-  multi-tenancy. These are scoped in the [roadmap](/roadmap/) but do not exist
-  in the codebase today.
+  Pub/Sub (Phase 1) — `CACHE.SEMANTIC`, `CACHE.PROMPT`, and `TOOL.CACHE`
+  (Phase 2) — `VECTOR.UPSERT`/`SEARCH`/`DELETE` and a native
+  [MCP server](/getting-started/mcp-server) sharing the same memory (Phase 3).
+  See the [command reference](/commands/) for the exact list.
+- 🔶 **Designed, not built yet:** shared agent memory, memory versioning, a
+  knowledge graph, cost analytics, and multi-tenancy. These are scoped in the
+  [roadmap](/roadmap/) but do not exist in the codebase today.
 
 Cache-Pot is also volatile, in-memory-only storage — there is no persistence
 yet, and data is lost on restart. Read

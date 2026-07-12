@@ -36,17 +36,21 @@ persistence (RDB/AOF), bitmaps, streams, geo commands.
 See the [semantic cache](/commands/semantic-cache) and
 [tool cache](/commands/tool-cache) command pages.
 
-## Phase 3 — Native Vector Store + MCP Server *(planned)*
+## Phase 3 — Native Vector Store + MCP Server ✅
 
 - `VECTOR.UPSERT` / `VECTOR.SEARCH` / `VECTOR.DELETE` over a flat
-  (brute-force) index first — cosine, dot product, euclidean; metadata
-  filtering; namespaces
-- Naive hybrid keyword + vector search
-- A native MCP server exposing `remember` / `recall` / `search` /
-  `store_vector` / `find_similar` directly against the engine — no adapter
-  layer
+  (brute-force) index — cosine, dot product, euclidean; metadata filtering;
+  namespaces; naive hybrid keyword + vector search
+- A native MCP server (streamable HTTP, `--mcp-port`) exposing
+  `cache_semantic_set/get`, `cache_prompt_set/get`, `tool_cache_set/get`,
+  `store_vector`, `find_similar`, and `delete_vector` directly against the
+  same shared engine — no adapter layer. `remember`/`recall`/`summarize`
+  from the original vision are intentionally **not** exposed yet: they need
+  Phase 4/6 machinery that doesn't exist, and faking them would violate the
+  project's own honesty policy.
 
-See the [vector commands](/commands/vector) page.
+See the [vector commands](/commands/vector) and
+[MCP server](/getting-started/mcp-server) pages.
 
 ## Phase 4 — Agent Memory + Shared Memory *(planned)*
 

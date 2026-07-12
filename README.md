@@ -9,10 +9,11 @@ It speaks the Redis protocol, so adopting it starts with swapping a connection s
 It grows into shared, semantic, versioned memory that every agent and model in your stack
 can read and write.
 
-> **Status: Phases 1-2.** Today, Cache-Pot is a real, working Redis-compatible cache
+> **Status: Phases 1-3.** Today, Cache-Pot is a real, working Redis-compatible cache
 > (RESP2, core data structures, TTL, transactions, pub/sub) plus semantic/prompt/tool
-> caching (`CACHE.SEMANTIC`, `CACHE.PROMPT`, `TOOL.CACHE`). Native vector search, agent
-> memory, and everything else below is designed and scoped, not yet built.
+> caching (`CACHE.SEMANTIC`, `CACHE.PROMPT`, `TOOL.CACHE`), a native vector store
+> (`VECTOR.UPSERT`/`SEARCH`/`DELETE`), and a native MCP server sharing that same memory.
+> Shared agent memory and everything else below is designed and scoped, not yet built.
 > See [ROADMAP.md](ROADMAP.md) for the full arc and honest status of each pillar.
 
 ## Why not just Redis + Pinecone + Mem0?
@@ -21,10 +22,10 @@ can read and write.
 |---|---|---|---|---|---|
 | Fast KV cache | ✅ | | | | ✅ |
 | Semantic/prompt/tool-call caching | | | partial | | ✅ |
-| Vector search | | ✅ | | | Planned (Phase 3) |
+| Vector search | | ✅ | | | ✅ |
+| MCP-native tool access | | | | ✅ | ✅ |
 | Agent memory (semantic recall) | | | ✅ | | Planned (Phase 4) |
 | Shared memory across agents/models | | | partial | | Planned (Phase 4) |
-| MCP-native tool access | | | | ✅ | Planned (Phase 3) |
 | Separate services to run & pay for | — | 2 | 3 | 4 | **1** |
 
 Cache-Pot's bet: these are not separate problems. They're one memory engine with

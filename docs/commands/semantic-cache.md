@@ -26,9 +26,9 @@ CACHE.SEMANTIC GET <prompt> [MODEL <model>] [TEMP <temperature>] [THRESHOLD <flo
 - `GET` embeds `<prompt>` and returns the response of the closest previously-`SET`
   prompt in that partition, if its cosine similarity is at or above `THRESHOLD`
   (default `0.85`). Otherwise it returns a nil reply, same as `GET` on a missing key.
-- Matching is a brute-force scan within the partition (no approximate index yet — see
-  [Phase 3](/roadmap/#phase-3-—-native-vector-store-mcp-server-planned) for the native
-  vector store this will eventually share logic with).
+- Matching is a brute-force scan within the partition (no approximate index yet — same
+  flat-scan approach as the [native vector store](/commands/vector), which also has no
+  ANN index yet).
 
 ```bash
 redis-cli -p 6380 CACHE.SEMANTIC SET "What is Kubernetes?" "K8s is a container orchestrator." MODEL gpt-4

@@ -422,23 +422,23 @@
   status: real
   summary: SET/GET a tool-call result by tool name and canonicalized arguments
 
-# --- Phase 3: vector search + MCP server (status: planned) ---------------
+# --- Phase 3: vector search + MCP server (status: real) -------------------
 
 - name: VECTOR.UPSERT
   category: vector
   phase: 3
-  status: planned
-  summary: Insert or update a vector embedding in a named index
+  status: real
+  summary: Insert or update a vector embedding (plus optional metadata/text) in a namespace
 - name: VECTOR.SEARCH
   category: vector
   phase: 3
-  status: planned
-  summary: Nearest-neighbor search over a vector index
+  status: real
+  summary: Nearest-neighbor search over a namespace, with metric/filter/hybrid options
 - name: VECTOR.DELETE
   category: vector
   phase: 3
-  status: planned
-  summary: Delete a vector from a named index
+  status: real
+  summary: Delete a vector by id from a namespace
 
 # --- Phase 4: shared agent memory (status: planned) -----------------------
 

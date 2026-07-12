@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks through connecting to a running Cache-Pot server and exercising
-the Phase 1-2 commands that are real today. See
+the Phase 1-3 commands that are real today. See
 [Installation](/getting-started/installation) if you don't have a server
 running yet.
 
@@ -79,7 +79,7 @@ Any other RESP2 client (redis-py, ioredis, jedis, node-redis, etc.) works the
 same way — point it at Cache-Pot's host/port instead of Redis's.
 
 See the [command reference](/commands/) for the full list of what's
-implemented in Phase 1-2.
+implemented in Phase 1-3.
 
 ## Semantic and prompt caching (Phase 2)
 
@@ -100,6 +100,25 @@ redis-cli -p 6380 TOOL.CACHE GET github.getIssue '{"issue":42,"repo":"cache-pot"
 See the [semantic cache](/commands/semantic-cache) and
 [tool cache](/commands/tool-cache) pages for the full command syntax.
 
+## Vector search and MCP (Phase 3)
+
+```bash
+redis-cli -p 6380 VECTOR.UPSERT docs a '[1,0,0]' TEXT "cats are cute"
+redis-cli -p 6380 VECTOR.UPSERT docs b '[0,1,0]' TEXT "dogs are loyal"
+redis-cli -p 6380 VECTOR.SEARCH docs '[1,0,0]' WITHSCORES
+# 1) "a"
+# 2) "1"
+# 3) "b"
+# 4) "0"
+```
+
+Cache-Pot also runs a native MCP server on port `6381` by default, exposing this same
+vector store (plus the semantic/prompt/tool caches above) as MCP tools, sharing the
+exact same in-memory state as the RESP commands above. See the
+[MCP server](/getting-started/mcp-server) page.
+
+See the [vector commands](/commands/vector) page for the full command syntax.
+
 ## A look ahead: agent memory
 
 Cache-Pot's actual pitch beyond "Redis clone" is shared, semantic memory for
@@ -114,7 +133,7 @@ MEMORY.SEARCH agent:research-bot "how does this user like answers formatted?"
 ::: info Planned — Phase 4
 `MEMORY.PUT` / `MEMORY.GET` / `MEMORY.SEARCH` and `AGENT.REMEMBER` /
 `AGENT.RECALL` are designed but not implemented yet. Running them against a
-Phase 1-2 server today will fail with an unknown-command error. See the
+Phase 1-3 server today will fail with an unknown-command error. See the
 [roadmap](/roadmap/) and [memory commands](/commands/memory) page for
 details.
 :::
