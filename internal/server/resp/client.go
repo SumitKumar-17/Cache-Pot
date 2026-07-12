@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/storage"
@@ -34,11 +35,16 @@ type Deps struct {
 	// cache); PromptCache backs CACHE.PROMPT (exact-match template cache);
 	// ToolCache backs TOOL.CACHE (exact-match agent tool-call result
 	// cache); VectorStore backs VECTOR.UPSERT/VECTOR.SEARCH/VECTOR.DELETE
-	// (Phase 3's native flat vector index, partitioned by namespace).
+	// (Phase 3's native flat vector index, partitioned by namespace);
+	// MemoryStore backs MEMORY.PUT/MEMORY.GET/MEMORY.SEARCH (Phase 4's
+	// shared agent-memory domain layer, internally using its own
+	// *vector.Store instance as a search index -- a separate concern from
+	// this VectorStore, which is exposed directly to RESP clients).
 	SemanticCache *semantic.SemanticCache
 	PromptCache   *semantic.PromptCache
 	ToolCache     *toolcache.ToolCache
 	VectorStore   *vector.Store
+	MemoryStore   *memory.Store
 }
 
 // ClientState is per-connection state: authentication, the selected

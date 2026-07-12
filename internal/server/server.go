@@ -19,6 +19,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
+	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/server/resp"
@@ -89,6 +90,7 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		PromptCache:   semantic.NewPromptCache(),
 		ToolCache:     toolcache.New(),
 		VectorStore:   vector.New(),
+		MemoryStore:   memory.New(provider),
 	}
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())

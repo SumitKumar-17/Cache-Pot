@@ -7,6 +7,7 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
+	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/storage/memstore"
@@ -31,6 +32,7 @@ func newTestDeps(t *testing.T) *Deps {
 		PromptCache:   semantic.NewPromptCache(),
 		ToolCache:     toolcache.New(),
 		VectorStore:   vector.New(),
+		MemoryStore:   memory.New(embed.NewMock(8)),
 	}
 }
 
