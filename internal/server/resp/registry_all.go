@@ -16,4 +16,5 @@ func RegisterAll(r *Registry) {
 	RegisterToolCache(r)
 	RegisterVector(r)
 	RegisterMemory(r)
+	RegisterAgent(r)
 }
