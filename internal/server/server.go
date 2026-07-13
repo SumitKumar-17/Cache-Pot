@@ -75,6 +75,11 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	if err != nil {
 		return err
 	}
+	// Wrap once, here, so SemanticCache and MemoryStore below share the same
+	// instrumented instance -- every Embed/EmbedBatch call either makes,
+	// regardless of caller, is recorded on s.metrics (see
+	// internal/observability's embed_instrument.go).
+	provider = observability.InstrumentProvider(provider, s.metrics)
 
 	registry := resp.NewRegistry()
 	resp.RegisterAll(registry)
@@ -99,8 +104,19 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	// and shares s.deps's SemanticCache/PromptCache/ToolCache/VectorStore/
 	// MemoryStore instances with the RESP listener above -- an MCP client
 	// and a RESP client observe the exact same cache/vector-store/memory
-	// state, with no
-	// adapter layer or second storage in between.
+	// state, with no adapter layer or second storage in between.
+	//
+	// /metrics (Prometheus text) and /stats (JSON) are mounted on the same
+	// listener/mux, alongside the MCP handler at "/" -- http.ServeMux
+	// (Go 1.22+) prefers a more specific registered pattern like "/metrics"
+	// over the catch-all "/", so this doesn't disturb existing MCP client
+	// connections at the documented http://host:6381/ address. This does
+	// mean /metrics and /stats are only reachable when the MCP listener
+	// itself is enabled (--mcp-port != 0) -- they share its port rather
+	// than getting a dedicated one, to avoid adding a second listener/flag
+	// for a need that doesn't (yet) justify one. A standalone
+	// --metrics-port would be a reasonable future addition if that
+	// coupling proves undesirable.
 	var mcpSrv *http.Server
 	var mcpDone chan struct{}
 	if s.cfg.MCPPort != 0 {
@@ -108,8 +124,12 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		if err != nil {
 			return fmt.Errorf("server: listen on MCP port %d: %w", s.cfg.MCPPort, err)
 		}
-		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore)
-		mcpSrv = &http.Server{Handler: mcpServer.Handler()}
+		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore, s.metrics)
+		mux := http.NewServeMux()
+		mux.Handle("/", mcpServer.Handler())
+		mux.Handle("/metrics", observability.MetricsHandler(s.metrics))
+		mux.Handle("/stats", observability.StatsHandler(s.metrics))
+		mcpSrv = &http.Server{Handler: mux}
 		mcpDone = make(chan struct{})
 		go func() {
 			defer close(mcpDone)

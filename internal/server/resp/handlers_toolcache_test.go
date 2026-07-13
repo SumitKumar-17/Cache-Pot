@@ -34,6 +34,19 @@ func TestToolCacheSetGetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestToolCacheHitMissMetrics(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "TOOL.CACHE", "SET", "github.get_issue", `{"repo":"foo"}`, `{"title":"a bug"}`)
+	execCommand(t, cs, "TOOL.CACHE", "GET", "github.get_issue", `{"repo":"foo"}`) // hit
+	execCommand(t, cs, "TOOL.CACHE", "GET", "github.get_issue", `{"repo":"bar"}`) // miss
+
+	snap := cs.Deps.Metrics.Snapshot()
+	if snap.ToolCache.Hits != 1 || snap.ToolCache.Misses != 1 {
+		t.Fatalf("ToolCache stats = %+v, want 1 hit/1 miss", snap.ToolCache)
+	}
+}
+
 func TestToolCacheGetEmptyCacheMiss(t *testing.T) {
 	cs := newTestClientState(t)
 
@@ -96,4 +109,3 @@ func TestToolCacheTTLExpires(t *testing.T) {
 		t.Fatalf("TOOL.CACHE GET (before TTL expiry) reply = %q, want %q", out, want)
 	}
 }
-

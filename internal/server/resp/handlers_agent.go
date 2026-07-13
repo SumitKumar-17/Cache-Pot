@@ -86,6 +86,7 @@ func handleAgentRemember(cs *ClientState, args []string) Reply {
 	if err != nil {
 		return Err("ERR " + err.Error())
 	}
+	cs.Deps.Metrics.MemoryWrite()
 	return BulkString(storedID)
 }
 
@@ -164,6 +165,7 @@ func handleAgentRecall(cs *ClientState, args []string) Reply {
 	if err != nil {
 		return Err("ERR " + err.Error())
 	}
+	cs.Deps.Metrics.MemoryRead()
 
 	items := make([]Reply, 0, len(results)*2)
 	for _, r := range results {

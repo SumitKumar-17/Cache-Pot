@@ -124,8 +124,10 @@ func handleCacheSemanticGet(cs *ClientState, args []string) Reply {
 		return Err("ERR " + err.Error())
 	}
 	if !found {
+		cs.Deps.Metrics.SemanticCacheMiss()
 		return NullBulk()
 	}
+	cs.Deps.Metrics.SemanticCacheHit()
 	return BulkString(response)
 }
 
@@ -200,7 +202,9 @@ func handleCachePromptGet(cs *ClientState, args []string) Reply {
 
 	response, found := cs.Deps.PromptCache.Get(key)
 	if !found {
+		cs.Deps.Metrics.PromptCacheMiss()
 		return NullBulk()
 	}
+	cs.Deps.Metrics.PromptCacheHit()
 	return BulkString(response)
 }

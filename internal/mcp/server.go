@@ -28,6 +28,7 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
+	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
 	"github.com/SumitKumar-17/cache-pot/internal/toolcache"
 	"github.com/SumitKumar-17/cache-pot/internal/vector"
@@ -68,6 +69,7 @@ type Server struct {
 	toolCache     *toolcache.ToolCache
 	vectorStore   *vector.Store
 	memoryStore   *memory.Store
+	metrics       *observability.Metrics
 
 	sdk *sdkmcp.Server
 }
@@ -77,14 +79,17 @@ type Server struct {
 // to build resp.Deps -- constructing new semantic.SemanticCache/
 // semantic.PromptCache/toolcache.ToolCache/vector.Store/memory.Store
 // instances here instead would silently create a second, disconnected
-// memory space, defeating the entire point of "no adapter layer".
-func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store) *Server {
+// memory space, defeating the entire point of "no adapter layer". metrics
+// should likewise be the same *observability.Metrics the RESP listener
+// records into, so /metrics and /stats reflect both protocols' traffic.
+func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store, metrics *observability.Metrics) *Server {
 	s := &Server{
 		semanticCache: semanticCache,
 		promptCache:   promptCache,
 		toolCache:     toolCache,
 		vectorStore:   vectorStore,
 		memoryStore:   memoryStore,
+		metrics:       metrics,
 	}
 	s.sdk = sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
@@ -158,6 +163,7 @@ type CacheSemanticSetOutput struct {
 }
 
 func (s *Server) cacheSemanticSet(ctx context.Context, _ *sdkmcp.CallToolRequest, in CacheSemanticSetInput) (*sdkmcp.CallToolResult, CacheSemanticSetOutput, error) {
+	s.metrics.MCPCallRecorded("cache_semantic_set")
 	model := in.Model
 	if model == "" {
 		model = defaultSemanticModel
@@ -196,6 +202,7 @@ type CacheSemanticGetOutput struct {
 }
 
 func (s *Server) cacheSemanticGet(ctx context.Context, _ *sdkmcp.CallToolRequest, in CacheSemanticGetInput) (*sdkmcp.CallToolResult, CacheSemanticGetOutput, error) {
+	s.metrics.MCPCallRecorded("cache_semantic_get")
 	model := in.Model
 	if model == "" {
 		model = defaultSemanticModel
@@ -214,6 +221,11 @@ func (s *Server) cacheSemanticGet(ctx context.Context, _ *sdkmcp.CallToolRequest
 	response, found, err := s.semanticCache.Get(ctx, in.Prompt, model, temp, threshold)
 	if err != nil {
 		return nil, CacheSemanticGetOutput{}, err
+	}
+	if found {
+		s.metrics.SemanticCacheHit()
+	} else {
+		s.metrics.SemanticCacheMiss()
 	}
 	return nil, CacheSemanticGetOutput{Found: found, Response: response}, nil
 }
@@ -237,6 +249,7 @@ type CachePromptSetOutput struct {
 }
 
 func (s *Server) cachePromptSet(_ context.Context, _ *sdkmcp.CallToolRequest, in CachePromptSetInput) (*sdkmcp.CallToolResult, CachePromptSetOutput, error) {
+	s.metrics.MCPCallRecorded("cache_prompt_set")
 	key, err := semantic.TemplateKey(in.Template, in.VariablesJSON, in.Model)
 	if err != nil {
 		return nil, CachePromptSetOutput{}, fmt.Errorf("mcp: invalid variables_json: %w", err)
@@ -260,11 +273,17 @@ type CachePromptGetOutput struct {
 }
 
 func (s *Server) cachePromptGet(_ context.Context, _ *sdkmcp.CallToolRequest, in CachePromptGetInput) (*sdkmcp.CallToolResult, CachePromptGetOutput, error) {
+	s.metrics.MCPCallRecorded("cache_prompt_get")
 	key, err := semantic.TemplateKey(in.Template, in.VariablesJSON, in.Model)
 	if err != nil {
 		return nil, CachePromptGetOutput{}, fmt.Errorf("mcp: invalid variables_json: %w", err)
 	}
 	response, found := s.promptCache.Get(key)
+	if found {
+		s.metrics.PromptCacheHit()
+	} else {
+		s.metrics.PromptCacheMiss()
+	}
 	return nil, CachePromptGetOutput{Found: found, Response: response}, nil
 }
 
@@ -285,6 +304,7 @@ type ToolCacheSetOutput struct {
 }
 
 func (s *Server) toolCacheSet(_ context.Context, _ *sdkmcp.CallToolRequest, in ToolCacheSetInput) (*sdkmcp.CallToolResult, ToolCacheSetOutput, error) {
+	s.metrics.MCPCallRecorded("tool_cache_set")
 	key, err := toolcache.ToolKey(in.ToolName, in.ArgsJSON)
 	if err != nil {
 		return nil, ToolCacheSetOutput{}, fmt.Errorf("mcp: invalid args_json: %w", err)
@@ -307,11 +327,17 @@ type ToolCacheGetOutput struct {
 }
 
 func (s *Server) toolCacheGet(_ context.Context, _ *sdkmcp.CallToolRequest, in ToolCacheGetInput) (*sdkmcp.CallToolResult, ToolCacheGetOutput, error) {
+	s.metrics.MCPCallRecorded("tool_cache_get")
 	key, err := toolcache.ToolKey(in.ToolName, in.ArgsJSON)
 	if err != nil {
 		return nil, ToolCacheGetOutput{}, fmt.Errorf("mcp: invalid args_json: %w", err)
 	}
 	result, found := s.toolCache.Get(key)
+	if found {
+		s.metrics.ToolCacheHit()
+	} else {
+		s.metrics.ToolCacheMiss()
+	}
 	return nil, ToolCacheGetOutput{Found: found, Result: result}, nil
 }
 
@@ -366,6 +392,7 @@ type StoreVectorOutput struct {
 }
 
 func (s *Server) storeVector(_ context.Context, _ *sdkmcp.CallToolRequest, in StoreVectorInput) (*sdkmcp.CallToolResult, StoreVectorOutput, error) {
+	s.metrics.MCPCallRecorded("store_vector")
 	s.vectorStore.Upsert(in.Namespace, in.ID, in.Vector, in.Metadata, in.Text)
 	return nil, StoreVectorOutput{OK: true}, nil
 }
@@ -394,6 +421,7 @@ type FindSimilarOutput struct {
 }
 
 func (s *Server) findSimilar(_ context.Context, _ *sdkmcp.CallToolRequest, in FindSimilarInput) (*sdkmcp.CallToolResult, FindSimilarOutput, error) {
+	s.metrics.MCPCallRecorded("find_similar")
 	metric, err := parseMetric(in.Metric)
 	if err != nil {
 		return nil, FindSimilarOutput{}, err
@@ -404,6 +432,7 @@ func (s *Server) findSimilar(_ context.Context, _ *sdkmcp.CallToolRequest, in Fi
 	}
 
 	results := s.vectorStore.Search(in.Namespace, in.Vector, k, metric, in.Filter, nil)
+	s.metrics.VectorSearchPerformed()
 	out := make([]FindSimilarMatch, len(results))
 	for i, r := range results {
 		out[i] = FindSimilarMatch{ID: r.ID, Score: r.Score}
@@ -424,6 +453,7 @@ type DeleteVectorOutput struct {
 }
 
 func (s *Server) deleteVector(_ context.Context, _ *sdkmcp.CallToolRequest, in DeleteVectorInput) (*sdkmcp.CallToolResult, DeleteVectorOutput, error) {
+	s.metrics.MCPCallRecorded("delete_vector")
 	deleted := s.vectorStore.Delete(in.Namespace, in.ID)
 	return nil, DeleteVectorOutput{Deleted: deleted}, nil
 }
@@ -471,6 +501,7 @@ type RememberOutput struct {
 }
 
 func (s *Server) remember(ctx context.Context, _ *sdkmcp.CallToolRequest, in RememberInput) (*sdkmcp.CallToolResult, RememberOutput, error) {
+	s.metrics.MCPCallRecorded("remember")
 	workspace := in.Workspace
 	if workspace == "" {
 		workspace = defaultMemoryWorkspace
@@ -496,6 +527,7 @@ func (s *Server) remember(ctx context.Context, _ *sdkmcp.CallToolRequest, in Rem
 	if err != nil {
 		return nil, RememberOutput{}, err
 	}
+	s.metrics.MemoryWrite()
 	return nil, RememberOutput{ID: id}, nil
 }
 
@@ -525,6 +557,7 @@ type RecallOutput struct {
 }
 
 func (s *Server) recall(ctx context.Context, _ *sdkmcp.CallToolRequest, in RecallInput) (*sdkmcp.CallToolResult, RecallOutput, error) {
+	s.metrics.MCPCallRecorded("recall")
 	workspace := in.Workspace
 	if workspace == "" {
 		workspace = defaultMemoryWorkspace
@@ -551,6 +584,7 @@ func (s *Server) recall(ctx context.Context, _ *sdkmcp.CallToolRequest, in Recal
 	if err != nil {
 		return nil, RecallOutput{}, err
 	}
+	s.metrics.MemoryRead()
 	out := make([]RecallMatch, len(results))
 	for i, r := range results {
 		out[i] = RecallMatch{ID: r.ID, Score: r.Score}

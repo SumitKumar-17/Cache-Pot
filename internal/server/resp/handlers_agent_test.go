@@ -41,6 +41,21 @@ func TestAgentRememberThenMemoryGetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAgentRememberRecallMetrics(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "AGENT.REMEMBER", "agent-1", "the user prefers dark mode")
+	execCommand(t, cs, "AGENT.RECALL", "agent-1", "dark mode preference")
+
+	snap := cs.Deps.Metrics.Snapshot()
+	if snap.MemoryWritesTotal != 1 {
+		t.Fatalf("MemoryWritesTotal = %d, want 1", snap.MemoryWritesTotal)
+	}
+	if snap.MemoryReadsTotal != 1 {
+		t.Fatalf("MemoryReadsTotal = %d, want 1", snap.MemoryReadsTotal)
+	}
+}
+
 func TestAgentRememberDefaultsMatchMemoryPut(t *testing.T) {
 	cs := newTestClientState(t)
 

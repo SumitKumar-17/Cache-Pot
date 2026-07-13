@@ -85,7 +85,9 @@ func handleToolCacheGet(cs *ClientState, args []string) Reply {
 
 	result, found := cs.Deps.ToolCache.Get(key)
 	if !found {
+		cs.Deps.Metrics.ToolCacheMiss()
 		return NullBulk()
 	}
+	cs.Deps.Metrics.ToolCacheHit()
 	return BulkString(result)
 }

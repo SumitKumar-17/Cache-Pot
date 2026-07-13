@@ -49,7 +49,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	vectorStore := vector.New()
 	memoryStore := memory.New(embed.NewMock(8))
 
-	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore)
+	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore, observability.NewMetrics())
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 

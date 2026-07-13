@@ -39,6 +39,22 @@ func TestMemoryPutGetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestMemoryReadWriteMetrics(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "the user prefers dark mode", "ID", "mem-1")
+	execCommand(t, cs, "MEMORY.GET", "default", "mem-1")
+	execCommand(t, cs, "MEMORY.SEARCH", "default", "dark mode preference")
+
+	snap := cs.Deps.Metrics.Snapshot()
+	if snap.MemoryWritesTotal != 1 {
+		t.Fatalf("MemoryWritesTotal = %d, want 1", snap.MemoryWritesTotal)
+	}
+	if snap.MemoryReadsTotal != 2 {
+		t.Fatalf("MemoryReadsTotal = %d, want 2 (1 GET + 1 SEARCH)", snap.MemoryReadsTotal)
+	}
+}
+
 func TestMemoryPutGeneratesIDWhenOmitted(t *testing.T) {
 	cs := newTestClientState(t)
 

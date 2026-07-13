@@ -38,6 +38,18 @@ func TestVectorUpsertSearchDeleteRoundTrip(t *testing.T) {
 	}
 }
 
+func TestVectorSearchMetrics(t *testing.T) {
+	cs := newTestClientState(t)
+	execCommand(t, cs, "VECTOR.UPSERT", "docs", "a", "[1,0]")
+	execCommand(t, cs, "VECTOR.SEARCH", "docs", "[1,0]")
+	execCommand(t, cs, "VECTOR.SEARCH", "docs", "[0,1]")
+
+	snap := cs.Deps.Metrics.Snapshot()
+	if snap.VectorSearchesTotal != 2 {
+		t.Fatalf("VectorSearchesTotal = %d, want 2", snap.VectorSearchesTotal)
+	}
+}
+
 func TestVectorSearchWithScores(t *testing.T) {
 	cs := newTestClientState(t)
 	execCommand(t, cs, "VECTOR.UPSERT", "docs", "a", "[1,0]")

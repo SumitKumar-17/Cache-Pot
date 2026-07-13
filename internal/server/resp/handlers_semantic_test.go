@@ -32,6 +32,22 @@ func TestCacheSemanticSetGetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCacheSemanticHitMissMetrics(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "CACHE.SEMANTIC", "SET", "What is Kubernetes?", "K8s is a container orchestrator.")
+	execCommand(t, cs, "CACHE.SEMANTIC", "GET", "What is Kubernetes?") // hit
+	execCommand(t, cs, "CACHE.SEMANTIC", "GET", "unrelated question")  // miss
+
+	snap := cs.Deps.Metrics.Snapshot()
+	if snap.SemanticCache.Hits != 1 {
+		t.Fatalf("SemanticCache.Hits = %d, want 1", snap.SemanticCache.Hits)
+	}
+	if snap.SemanticCache.Misses != 1 {
+		t.Fatalf("SemanticCache.Misses = %d, want 1", snap.SemanticCache.Misses)
+	}
+}
+
 func TestCacheSemanticGetDefaultsAndMiss(t *testing.T) {
 	cs := newTestClientState(t)
 

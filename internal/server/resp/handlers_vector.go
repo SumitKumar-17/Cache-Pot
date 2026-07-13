@@ -206,6 +206,7 @@ func handleVectorSearch(cs *ClientState, args []string) Reply {
 	}
 
 	results := cs.Deps.VectorStore.Search(namespace, vec, k, metric, filter, hybrid)
+	cs.Deps.Metrics.VectorSearchPerformed()
 
 	items := make([]Reply, 0, len(results)*2)
 	for _, res := range results {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"time"
 )
 
 // HandleConn drives one client connection end to end: read a command,
@@ -35,7 +36,9 @@ func HandleConn(conn net.Conn, deps *Deps) {
 			continue
 		}
 
+		start := time.Now()
 		reply := deps.Registry.Handle(cs, args)
+		deps.Metrics.RecordCommandLatency(commandFamily(args[0]), time.Since(start))
 		deps.Metrics.CommandExecuted()
 		if err := cs.writeReply(reply); err != nil {
 			return
