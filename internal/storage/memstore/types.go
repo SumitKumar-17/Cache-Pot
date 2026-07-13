@@ -50,6 +50,12 @@ type Entry struct {
 	// LastAccess supports the Phase 1 LRU eviction policy
 	// (internal/eviction/lru.go). Updated on reads and writes.
 	LastAccess time.Time
+
+	// AccessCount is the number of times this entry has been read/written
+	// (incremented at every call site that also updates LastAccess). It
+	// feeds internal/eviction.Weighted's frequency signal; 0 means "never
+	// tracked as accessed beyond creation," not "explicitly cold."
+	AccessCount int64
 }
 
 // expired reports whether the entry's TTL has passed as of now.

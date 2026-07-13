@@ -34,6 +34,7 @@ type Metrics struct {
 	vectorSearches      atomic.Int64
 	memoryReads         atomic.Int64
 	memoryWrites        atomic.Int64
+	evictionsTotal      atomic.Int64
 
 	mcpCallsTotal  atomic.Int64
 	mcpMu          sync.Mutex
@@ -132,6 +133,13 @@ func (m *Metrics) MemoryRead() { m.memoryReads.Add(1) }
 // MemoryWrite records one agent-memory write (MEMORY.PUT or AGENT.REMEMBER).
 func (m *Metrics) MemoryWrite() { m.memoryWrites.Add(1) }
 
+// KeyEvicted records one key evicted by internal/storage/memstore's
+// maxmemory-style bounded-size trigger. It's a plain no-argument callback
+// (see memstore.WithOnEvict) so memstore never needs to import this
+// package -- observability depends on storage-adjacent behavior, not the
+// other way around.
+func (m *Metrics) KeyEvicted() { m.evictionsTotal.Add(1) }
+
 // MCPCallRecorded records one MCP tool invocation, both overall and by tool
 // name.
 func (m *Metrics) MCPCallRecorded(tool string) {
@@ -218,6 +226,7 @@ type Snapshot struct {
 	VectorSearchesTotal int64
 	MemoryReadsTotal    int64
 	MemoryWritesTotal   int64
+	EvictionsTotal      int64
 
 	MCPCallsTotal  int64
 	MCPCallsByTool map[string]int64
@@ -267,6 +276,7 @@ func (m *Metrics) Snapshot() Snapshot {
 		VectorSearchesTotal: m.vectorSearches.Load(),
 		MemoryReadsTotal:    m.memoryReads.Load(),
 		MemoryWritesTotal:   m.memoryWrites.Load(),
+		EvictionsTotal:      m.evictionsTotal.Load(),
 
 		MCPCallsTotal:  m.mcpCallsTotal.Load(),
 		MCPCallsByTool: byTool,

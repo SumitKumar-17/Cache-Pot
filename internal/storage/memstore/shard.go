@@ -2,7 +2,10 @@ package memstore
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/SumitKumar-17/cache-pot/internal/eviction"
 )
 
 // shard is one partition of the overall keyspace: a plain map guarded by its
@@ -23,13 +26,23 @@ type shard struct {
 	// SET on a watched key still aborts the transaction), so it is tracked
 	// independently of the Entry object's lifetime.
 	versions map[string]uint64
+
+	// entryCount points at the owning Store's global entry-count counter.
+	// setEntryLocked/deleteEntryLocked adjust it atomically whenever a key
+	// is genuinely inserted/removed (not just updated in place), so
+	// Store.EntryCount() stays exact across every code path that writes or
+	// deletes from any shard's data map -- passive/active TTL expiry, DEL,
+	// FLUSHDB/FLUSHALL, RENAME, and the eviction trigger itself -- without
+	// each of those call sites needing to remember to update it themselves.
+	entryCount *int64
 }
 
-func newShard() *shard {
+func newShard(entryCount *int64) *shard {
 	return &shard{
-		data:     make(map[string]*Entry),
-		ttlKeys:  make(map[string]struct{}),
-		versions: make(map[string]uint64),
+		data:       make(map[string]*Entry),
+		ttlKeys:    make(map[string]struct{}),
+		versions:   make(map[string]uint64),
+		entryCount: entryCount,
 	}
 }
 
@@ -66,9 +79,14 @@ func (s *shard) getForWriteLocked(key string, now time.Time) *Entry {
 	return e
 }
 
-// setEntryLocked stores e under key, maintaining the ttlKeys index. Caller
-// must hold the write lock.
+// setEntryLocked stores e under key, maintaining the ttlKeys index and the
+// global entry count (incremented only when key did not already exist --
+// an update to an existing key is not a new entry). Caller must hold the
+// write lock.
 func (s *shard) setEntryLocked(key string, e *Entry) {
+	if _, existed := s.data[key]; !existed {
+		atomic.AddInt64(s.entryCount, 1)
+	}
 	s.data[key] = e
 	if e.ExpiresAt != nil {
 		s.ttlKeys[key] = struct{}{}
@@ -90,11 +108,16 @@ func (s *shard) setExpiryLocked(key string, e *Entry, at *time.Time) {
 	s.bumpVersionLocked(key)
 }
 
-// deleteEntryLocked removes key from data and ttlKeys. Caller must hold the
-// write lock. The version counter is intentionally left untouched by
-// deletion bookkeeping here; callers that delete as part of a semantic
-// mutation (DEL, expiry, etc.) call bumpVersionLocked explicitly.
+// deleteEntryLocked removes key from data and ttlKeys, decrementing the
+// global entry count iff key was actually present (deleting an
+// already-absent key must not under-count). Caller must hold the write
+// lock. The version counter is intentionally left untouched by deletion
+// bookkeeping here; callers that delete as part of a semantic mutation
+// (DEL, expiry, etc.) call bumpVersionLocked explicitly.
 func (s *shard) deleteEntryLocked(key string) {
+	if _, existed := s.data[key]; existed {
+		atomic.AddInt64(s.entryCount, -1)
+	}
 	delete(s.data, key)
 	delete(s.ttlKeys, key)
 }
@@ -132,4 +155,40 @@ func (s *shard) sweepSampleLocked(sampleSize int, now time.Time) int {
 		}
 	}
 	return removed
+}
+
+// pickEvictionVictimLocked samples up to sampleSize existing entries in
+// this shard (all of them if the shard has fewer), scores each via policy,
+// and returns the composite key of the single highest-scoring one (the
+// "most evictable" per the policy's convention), or "" if the shard is
+// empty. Caller must hold the write lock.
+//
+// This is intentionally approximate/local -- a bounded sample of one
+// shard, not a global exact sort over the whole keyspace -- mirroring the
+// same "bounded-sample first, exact global structures are future work if
+// ever needed" philosophy internal/storage/ttl's reaper already
+// established for TTL expiry in this codebase.
+func (s *shard) pickEvictionVictimLocked(policy eviction.Policy, now time.Time, sampleSize int) string {
+	var victimKey string
+	var victimScore float64
+	haveVictim := false
+
+	examined := 0
+	for key, e := range s.data {
+		if examined >= sampleSize {
+			break
+		}
+		examined++
+		score := policy.Score(eviction.Signals{
+			LastAccess:  e.LastAccess,
+			Now:         now,
+			AccessCount: e.AccessCount,
+		})
+		if !haveVictim || score > victimScore {
+			victimKey = key
+			victimScore = score
+			haveVictim = true
+		}
+	}
+	return victimKey
 }

@@ -42,6 +42,16 @@ type Config struct {
 	// ToolCache/VectorStore instances the RESP listener uses as MCP tools
 	// (see internal/mcp). Set to 0 to disable the MCP listener entirely.
 	MCPPort int
+
+	// MaxEntries bounds the total number of live keys (server-wide, across
+	// all workspaces) memstore.Store will hold before evicting to make
+	// room for a new key. 0 means unlimited (eviction disabled), matching
+	// this project's "0 means off" convention (e.g. MCPPort).
+	MaxEntries int
+	// EvictionPolicy selects the eviction.Policy used once MaxEntries is
+	// exceeded: "lru" (default) or "weighted". Any other value is a
+	// startup error.
+	EvictionPolicy string
 }
 
 const (
@@ -57,6 +67,13 @@ const (
 	// remember together. Set --mcp-port/CACHEPOT_MCP_PORT to 0 to disable
 	// the MCP listener entirely.
 	DefaultMCPPort = 6381
+	// DefaultMaxEntries is 0 (unlimited) so cachepotd behaves exactly as it
+	// always has -- no memory/entry-count bound -- unless an operator
+	// explicitly opts in.
+	DefaultMaxEntries = 0
+	// DefaultEvictionPolicy is "lru", matching this project's original
+	// (and only, prior to Phase 5) eviction policy.
+	DefaultEvictionPolicy = "lru"
 )
 
 // DefaultConfig returns the Phase 1 default configuration (no auth
@@ -67,5 +84,7 @@ func DefaultConfig() Config {
 		MaxConnections: DefaultMaxConnections,
 		EmbedProvider:  DefaultEmbedProvider,
 		MCPPort:        DefaultMCPPort,
+		MaxEntries:     DefaultMaxEntries,
+		EvictionPolicy: DefaultEvictionPolicy,
 	}
 }

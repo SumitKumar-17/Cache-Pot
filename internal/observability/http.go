@@ -42,6 +42,7 @@ func MetricsHandler(m *Metrics) http.Handler {
 		counter("cachepot_vector_searches_total", "VECTOR.SEARCH invocations.", snap.VectorSearchesTotal)
 		counter("cachepot_memory_reads_total", "Agent-memory reads (MEMORY.GET/SEARCH, AGENT.RECALL).", snap.MemoryReadsTotal)
 		counter("cachepot_memory_writes_total", "Agent-memory writes (MEMORY.PUT, AGENT.REMEMBER).", snap.MemoryWritesTotal)
+		counter("cachepot_evictions_total", "Keys evicted by the maxmemory-style bounded-size trigger.", snap.EvictionsTotal)
 
 		counter("cachepot_mcp_calls_total", "Total MCP tool invocations.", snap.MCPCallsTotal)
 		fmt.Fprintf(w, "# HELP cachepot_mcp_calls_by_tool_total Total MCP tool invocations, by tool name.\n# TYPE cachepot_mcp_calls_by_tool_total counter\n")
@@ -96,6 +97,7 @@ func StatsHandler(m *Metrics, tracker *analytics.Tracker) http.Handler {
 			VectorSearchesTotal: snap.VectorSearchesTotal,
 			MemoryReadsTotal:    snap.MemoryReadsTotal,
 			MemoryWritesTotal:   snap.MemoryWritesTotal,
+			EvictionsTotal:      snap.EvictionsTotal,
 			MCP: statsMCP{
 				CallsTotal:  snap.MCPCallsTotal,
 				CallsByTool: snap.MCPCallsByTool,
@@ -128,6 +130,7 @@ type statsResponse struct {
 	VectorSearchesTotal int64                 `json:"vector_searches_total"`
 	MemoryReadsTotal    int64                 `json:"memory_reads_total"`
 	MemoryWritesTotal   int64                 `json:"memory_writes_total"`
+	EvictionsTotal      int64                 `json:"evictions_total"`
 	MCP                 statsMCP              `json:"mcp"`
 	Embedding           statsEmbedding        `json:"embedding"`
 	Latency             []LatencyStats        `json:"latency_by_family"`

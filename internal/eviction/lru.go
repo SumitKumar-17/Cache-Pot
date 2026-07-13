@@ -1,7 +1,5 @@
 package eviction
 
-import "time"
-
 // LRU is the Phase 1 default eviction Policy: it scores entries purely by
 // how long ago they were last accessed. The longer since last access, the
 // higher (more evictable) the score.
@@ -11,11 +9,12 @@ type LRU struct{}
 func NewLRU() LRU { return LRU{} }
 
 // Score implements Policy: the score is simply the age (in seconds) since
-// lastAccess, so older (less recently used) entries sort as more eligible
-// for eviction.
-func (LRU) Score(lastAccess time.Time, now time.Time) float64 {
-	if lastAccess.IsZero() {
-		return float64(now.Unix())
+// Signals.LastAccess, so older (less recently used) entries sort as more
+// eligible for eviction. Only LastAccess/Now are used; the other Signals
+// fields are ignored.
+func (LRU) Score(s Signals) float64 {
+	if s.LastAccess.IsZero() {
+		return float64(s.Now.Unix())
 	}
-	return now.Sub(lastAccess).Seconds()
+	return s.Now.Sub(s.LastAccess).Seconds()
 }

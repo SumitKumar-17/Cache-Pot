@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SumitKumar-17/cache-pot/internal/eviction"
 	"github.com/SumitKumar-17/cache-pot/internal/storage"
 )
 
@@ -247,6 +248,223 @@ func TestListHashSetZSetBasics(t *testing.T) {
 	if err != nil || len(members) != 2 || members[0].Member != "m1" {
 		t.Fatalf("ZRange mismatch: %v %v", members, err)
 	}
+}
+
+// --- Phase 5 eviction tests -------------------------------------------
+
+// TestMaxEntriesZeroDisablesEviction confirms the "0 means off" convention:
+// with no WithMaxEntries option (defaulting to 0), inserting far more keys
+// than any reasonable cap never evicts anything.
+func TestMaxEntriesZeroDisablesEviction(t *testing.T) {
+	clock := newTestClock(time.Now())
+	s := newTestStore(t, clock, 4)
+
+	const n = 100
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("k%d", i)
+		if _, _, _, err := s.Set("default", key, []byte("v"), storage.SetOpts{}); err != nil {
+			t.Fatalf("Set(%s): %v", key, err)
+		}
+	}
+	if got := s.EntryCount(); got != n {
+		t.Fatalf("expected all %d keys retained with maxEntries=0 (default), EntryCount()=%d", n, got)
+	}
+}
+
+// TestMaxEntriesEvictsLRUVictim uses a single shard (so which shard
+// receives the new key is never in question) and the default LRU policy:
+// inserting past the cap evicts exactly the least-recently-used existing
+// entry, and the running EntryCount() reflects it.
+func TestMaxEntriesEvictsLRUVictim(t *testing.T) {
+	clock := newTestClock(time.Now())
+	s := NewWithClock(1, clock.Now, WithMaxEntries(3))
+	t.Cleanup(func() { _ = s.Close() })
+
+	for _, k := range []string{"a", "b", "c"} {
+		if _, _, _, err := s.Set("default", k, []byte("v"), storage.SetOpts{}); err != nil {
+			t.Fatalf("Set(%s): %v", k, err)
+		}
+		clock.Advance(time.Second)
+	}
+	// Touch b and c so "a" is unambiguously the least-recently-used entry.
+	if _, _, err := s.Get("default", "b"); err != nil {
+		t.Fatalf("Get(b): %v", err)
+	}
+	if _, _, err := s.Get("default", "c"); err != nil {
+		t.Fatalf("Get(c): %v", err)
+	}
+	clock.Advance(time.Second)
+
+	// A 4th distinct key pushes the count over the cap of 3.
+	if _, _, _, err := s.Set("default", "d", []byte("v"), storage.SetOpts{}); err != nil {
+		t.Fatalf("Set(d): %v", err)
+	}
+
+	if got := s.EntryCount(); got != 3 {
+		t.Fatalf("expected EntryCount()==3 after eviction, got %d", got)
+	}
+	if _, found, _ := s.Get("default", "a"); found {
+		t.Fatalf("expected 'a' (least recently used) to have been evicted")
+	}
+	for _, k := range []string{"b", "c", "d"} {
+		if _, found, _ := s.Get("default", k); !found {
+			t.Fatalf("expected %q to survive eviction, but it's gone", k)
+		}
+	}
+}
+
+// TestOnEvictCalledOncePerEviction inserts well past a small cap (using a
+// single shard, again to keep the eviction math exact regardless of key
+// hashing) and confirms the onEvict callback fires exactly once per entry
+// actually evicted -- no more, no less.
+func TestOnEvictCalledOncePerEviction(t *testing.T) {
+	clock := newTestClock(time.Now())
+	var mu sync.Mutex
+	evictions := 0
+	onEvict := func() {
+		mu.Lock()
+		evictions++
+		mu.Unlock()
+	}
+
+	s := NewWithClock(1, clock.Now, WithMaxEntries(5), WithOnEvict(onEvict))
+	t.Cleanup(func() { _ = s.Close() })
+
+	const n = 20
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("k%d", i)
+		if _, _, _, err := s.Set("default", key, []byte("v"), storage.SetOpts{}); err != nil {
+			t.Fatalf("Set(%s): %v", key, err)
+		}
+		clock.Advance(time.Millisecond)
+	}
+
+	mu.Lock()
+	got := evictions
+	mu.Unlock()
+
+	wantEvictions := n - 5
+	if got != wantEvictions {
+		t.Fatalf("expected %d onEvict calls, got %d", wantEvictions, got)
+	}
+	if entries := s.EntryCount(); entries != 5 {
+		t.Fatalf("expected EntryCount()==5 once the cap is saturated, got %d", entries)
+	}
+}
+
+// TestEntryCountExactAcrossDelFlushAndTTLExpiry confirms the running
+// entry-count tracker (Store.EntryCount) stays exact across every code
+// path that removes keys, not just the maxEntries-triggered eviction path:
+// explicit DEL, TTL-reaper-driven expiry, and FLUSHDB.
+func TestEntryCountExactAcrossDelFlushAndTTLExpiry(t *testing.T) {
+	clock := newTestClock(time.Now())
+	s := newTestStore(t, clock, 4) // maxEntries=0 (unbounded) -- isolate the counter from eviction.
+
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("k%d", i)
+		if _, _, _, err := s.Set("default", key, []byte("v"), storage.SetOpts{}); err != nil {
+			t.Fatalf("Set(%s): %v", key, err)
+		}
+	}
+	if got := s.EntryCount(); got != 10 {
+		t.Fatalf("EntryCount()=%d after 10 inserts, want 10", got)
+	}
+
+	if n := s.Del("default", "k0", "k1"); n != 2 {
+		t.Fatalf("Del removed %d keys, want 2", n)
+	}
+	if got := s.EntryCount(); got != 8 {
+		t.Fatalf("EntryCount()=%d after Del, want 8", got)
+	}
+
+	// Overwriting an existing key (k2, k3) with a short TTL is an update,
+	// not an insert -- EntryCount must not change.
+	if _, _, _, err := s.Set("default", "k2", []byte("v"), storage.SetOpts{TTL: 10 * time.Millisecond}); err != nil {
+		t.Fatalf("re-Set k2 with TTL: %v", err)
+	}
+	if _, _, _, err := s.Set("default", "k3", []byte("v"), storage.SetOpts{TTL: 10 * time.Millisecond}); err != nil {
+		t.Fatalf("re-Set k3 with TTL: %v", err)
+	}
+	if got := s.EntryCount(); got != 8 {
+		t.Fatalf("EntryCount()=%d after re-Set with TTL (an update, not an insert), want 8", got)
+	}
+
+	clock.Advance(20 * time.Millisecond)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && s.EntryCount() != 6 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if got := s.EntryCount(); got != 6 {
+		t.Fatalf("expected EntryCount()==6 once the TTL reaper swept k2/k3, got %d", got)
+	}
+
+	s.FlushDB("default")
+	if got := s.EntryCount(); got != 0 {
+		t.Fatalf("EntryCount()=%d after FlushDB, want 0", got)
+	}
+}
+
+// TestWeightedPolicyEvictionDiffersFromLRU is the actual point of this
+// phase: prove Weighted makes a different eviction choice than LRU on a
+// constructed access-count-vs-recency conflict, not just unit-test
+// Weighted.Score in isolation.
+//
+// "hot" is read 50 times right after creation (driving its AccessCount up)
+// and then left untouched while the clock advances 100s, so by the time a
+// 3rd key is inserted it's the least-recently-used entry. "cold" is
+// created right at that later instant -- very fresh LastAccess, but only
+// ever touched once. Under pure LRU, staleness alone decides: "hot" (the
+// frequently-accessed one) is evicted. Under a Weighted policy configured
+// to weigh frequency more heavily, "hot" survives because its high
+// AccessCount outweighs its staleness, and "cold" is evicted instead.
+func TestWeightedPolicyEvictionDiffersFromLRU(t *testing.T) {
+	setup := func(t *testing.T, policy eviction.Policy) *Store {
+		t.Helper()
+		clock := newTestClock(time.Now())
+		s := NewWithClock(1, clock.Now, WithMaxEntries(2), WithEvictionPolicy(policy))
+		t.Cleanup(func() { _ = s.Close() })
+
+		if _, _, _, err := s.Set("default", "hot", []byte("v"), storage.SetOpts{}); err != nil {
+			t.Fatalf("Set(hot): %v", err)
+		}
+		for i := 0; i < 50; i++ {
+			if _, _, err := s.Get("default", "hot"); err != nil {
+				t.Fatalf("Get(hot) #%d: %v", i, err)
+			}
+		}
+
+		clock.Advance(100 * time.Second)
+
+		if _, _, _, err := s.Set("default", "cold", []byte("v"), storage.SetOpts{}); err != nil {
+			t.Fatalf("Set(cold): %v", err)
+		}
+
+		if _, _, _, err := s.Set("default", "third", []byte("v"), storage.SetOpts{}); err != nil {
+			t.Fatalf("Set(third): %v", err)
+		}
+		return s
+	}
+
+	t.Run("lru evicts the stale-but-frequently-accessed entry", func(t *testing.T) {
+		s := setup(t, eviction.NewLRU())
+		if _, found, _ := s.Get("default", "hot"); found {
+			t.Fatalf("expected pure LRU to evict the stale 'hot' entry")
+		}
+		if _, found, _ := s.Get("default", "cold"); !found {
+			t.Fatalf("expected 'cold' to survive under pure LRU")
+		}
+	})
+
+	t.Run("weighted keeps the frequently-accessed entry despite staleness", func(t *testing.T) {
+		policy := eviction.NewWeighted(map[string]float64{"recency": 0.3, "frequency": 0.7})
+		s := setup(t, policy)
+		if _, found, _ := s.Get("default", "hot"); !found {
+			t.Fatalf("expected the weighted policy to keep the frequently-accessed 'hot' entry")
+		}
+		if _, found, _ := s.Get("default", "cold"); found {
+			t.Fatalf("expected the weighted policy to evict 'cold' instead")
+		}
+	})
 }
 
 // TestConcurrentAccess exercises the store from many goroutines to catch

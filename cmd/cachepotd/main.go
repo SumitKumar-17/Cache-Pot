@@ -89,6 +89,16 @@ func parseConfig() server.Config {
 			envMCPPort = n
 		}
 	}
+	envMaxEntries := server.DefaultMaxEntries
+	if v := os.Getenv("CACHEPOT_MAX_ENTRIES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			envMaxEntries = n
+		}
+	}
+	envEvictionPolicy := server.DefaultEvictionPolicy
+	if v := os.Getenv("CACHEPOT_EVICTION_POLICY"); v != "" {
+		envEvictionPolicy = v
+	}
 
 	// password and openAIAPIKey are secrets: their flag defaults are left
 	// empty (NOT envPassword/envOpenAIAPIKey) so `--help` never prints a
@@ -105,6 +115,8 @@ func parseConfig() server.Config {
 	openAIAPIKey := flag.String("openai-api-key", "", "OpenAI API key, required when --embed-provider=openai (env OPENAI_API_KEY)")
 	openAIAPIBase := flag.String("openai-api-base", envOpenAIAPIBase, `OpenAI-compatible API base URL, defaults to OpenAI's own API (env OPENAI_API_BASE)`)
 	mcpPort := flag.Int("mcp-port", envMCPPort, "TCP port for the native MCP (Model Context Protocol) HTTP server; 0 disables it (env CACHEPOT_MCP_PORT)")
+	maxEntries := flag.Int("max-entries", envMaxEntries, "maximum total live keys before eviction kicks in; 0 means unlimited (env CACHEPOT_MAX_ENTRIES)")
+	evictionPolicy := flag.String("eviction-policy", envEvictionPolicy, `eviction policy used once --max-entries is exceeded: "lru" or "weighted" (env CACHEPOT_EVICTION_POLICY)`)
 	flag.Parse()
 
 	resolvedPassword := *password
@@ -124,5 +136,7 @@ func parseConfig() server.Config {
 		OpenAIAPIKey:   resolvedOpenAIAPIKey,
 		OpenAIAPIBase:  *openAIAPIBase,
 		MCPPort:        *mcpPort,
+		MaxEntries:     *maxEntries,
+		EvictionPolicy: *evictionPolicy,
 	}
 }

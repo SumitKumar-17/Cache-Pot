@@ -19,6 +19,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
+	"github.com/SumitKumar-17/cache-pot/internal/eviction"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
@@ -71,7 +72,15 @@ func RunListener(ctx context.Context, cfg Config, ln net.Listener) error {
 }
 
 func (s *Server) run(ctx context.Context, ln net.Listener) error {
-	engine := memstore.New(32)
+	evictionPolicy, err := buildEvictionPolicy(s.cfg)
+	if err != nil {
+		return err
+	}
+	engine := memstore.New(32,
+		memstore.WithMaxEntries(s.cfg.MaxEntries),
+		memstore.WithEvictionPolicy(evictionPolicy),
+		memstore.WithOnEvict(s.metrics.KeyEvicted),
+	)
 	defer engine.Close()
 
 	provider, err := buildEmbedProvider(s.cfg)
@@ -244,5 +253,20 @@ func buildEmbedProvider(cfg Config) (embed.Provider, error) {
 		return embed.NewOpenAI(cfg.OpenAIAPIKey, "", cfg.OpenAIAPIBase), nil
 	default:
 		return nil, fmt.Errorf("server: unknown embed provider %q (want \"mock\" or \"openai\")", cfg.EmbedProvider)
+	}
+}
+
+// buildEvictionPolicy constructs the eviction.Policy selected by
+// cfg.EvictionPolicy ("lru" or "weighted", case-insensitive; empty defaults
+// to "lru"). Like buildEmbedProvider, it fails loudly at startup on an
+// unrecognized value rather than silently defaulting.
+func buildEvictionPolicy(cfg Config) (eviction.Policy, error) {
+	switch strings.ToLower(cfg.EvictionPolicy) {
+	case "", "lru":
+		return eviction.NewLRU(), nil
+	case "weighted":
+		return eviction.NewWeighted(nil), nil
+	default:
+		return nil, fmt.Errorf("server: unknown eviction policy %q (want \"lru\" or \"weighted\")", cfg.EvictionPolicy)
 	}
 }

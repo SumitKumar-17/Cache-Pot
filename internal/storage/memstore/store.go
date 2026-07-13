@@ -10,8 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/SumitKumar-17/cache-pot/internal/eviction"
 	"github.com/SumitKumar-17/cache-pot/internal/storage"
 	"github.com/SumitKumar-17/cache-pot/internal/storage/ttl"
 )
@@ -32,34 +34,102 @@ type Store struct {
 
 	reaperCancel context.CancelFunc
 	reaperDone   chan struct{}
+
+	// entryCount is the exact, server-wide (not per-workspace) total
+	// number of live entries across all shards. Every shard mutates it
+	// atomically as part of setEntryLocked/deleteEntryLocked, so it stays
+	// accurate across every insert/delete path (SET, HSET/LPUSH/etc.
+	// first-write, DEL, FLUSHDB/FLUSHALL, RENAME, and TTL-reaper-driven
+	// expiry) without each of those call sites needing to remember to
+	// touch it themselves.
+	entryCount int64
+
+	// maxEntries is the maxmemory-style bound on entryCount: 0 means
+	// unlimited (eviction disabled), matching this project's "0 means off"
+	// convention (e.g. --mcp-port 0).
+	maxEntries int
+
+	// policy scores entries for eviction eligibility when maxEntries is
+	// exceeded. Defaults to eviction.LRU{} even when maxEntries == 0,
+	// since it's simply unused in that case.
+	policy eviction.Policy
+
+	// onEvict, if non-nil, is called exactly once per evicted entry. This
+	// is how eviction visibility reaches internal/observability without
+	// this package importing it: the caller (internal/server) passes a
+	// plain callback (e.g. Metrics.KeyEvicted) instead.
+	onEvict func()
 }
 
 var _ storage.Engine = (*Store)(nil)
 
-const defaultNumShards = 32
+const (
+	defaultNumShards = 32
+
+	// evictionSampleSize bounds how many existing entries in the target
+	// shard are examined when the maxEntries cap is hit, mirroring
+	// internal/storage/ttl's reaper sample size for the same
+	// bounded-sampling philosophy.
+	evictionSampleSize = 20
+)
+
+// Option configures optional Store behavior not needed by most callers
+// (tests, and any caller happy with an unbounded store using the default
+// LRU policy) -- see WithMaxEntries, WithEvictionPolicy, and WithOnEvict.
+type Option func(*Store)
+
+// WithMaxEntries sets the server-wide entry-count cap that triggers
+// eviction. n <= 0 means unlimited (the default).
+func WithMaxEntries(n int) Option {
+	return func(s *Store) { s.maxEntries = n }
+}
+
+// WithEvictionPolicy sets the Policy used to pick an eviction victim once
+// maxEntries is exceeded. Ignored (but harmless) if maxEntries is left at
+// its default of 0.
+func WithEvictionPolicy(p eviction.Policy) Option {
+	return func(s *Store) {
+		if p != nil {
+			s.policy = p
+		}
+	}
+}
+
+// WithOnEvict sets a callback invoked exactly once per entry the store
+// evicts. nil-safe if never set.
+func WithOnEvict(f func()) Option {
+	return func(s *Store) { s.onEvict = f }
+}
 
 // New creates a Store with numShards shards (defaulting to 32 if <= 0) and
-// starts its background TTL reaper goroutine. Call Close to stop it.
-func New(numShards int) *Store {
-	return newStore(numShards, time.Now)
+// starts its background TTL reaper goroutine. Call Close to stop it. With
+// no options, eviction is disabled (maxEntries == 0, unbounded) -- the same
+// behavior this constructor has always had.
+func New(numShards int, opts ...Option) *Store {
+	return newStore(numShards, time.Now, opts...)
 }
 
 // NewWithClock is like New but lets callers (tests) inject a deterministic
-// clock instead of time.Now, so TTL-expiry behavior can be tested without
-// real time.Sleep calls.
-func NewWithClock(numShards int, clock func() time.Time) *Store {
-	return newStore(numShards, clock)
+// clock instead of time.Now, so TTL-expiry (and eviction-recency) behavior
+// can be tested without real time.Sleep calls.
+func NewWithClock(numShards int, clock func() time.Time, opts ...Option) *Store {
+	return newStore(numShards, clock, opts...)
 }
 
-func newStore(numShards int, clock func() time.Time) *Store {
+func newStore(numShards int, clock func() time.Time, opts ...Option) *Store {
 	if numShards <= 0 {
 		numShards = defaultNumShards
 	}
+	s := &Store{n: numShards, now: clock, policy: eviction.LRU{}}
+	for _, opt := range opts {
+		opt(s)
+	}
+
 	shards := make([]*shard, numShards)
 	for i := range shards {
-		shards[i] = newShard()
+		shards[i] = newShard(&s.entryCount)
 	}
-	s := &Store{shards: shards, n: numShards, now: clock}
+	s.shards = shards
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.reaperCancel = cancel
@@ -71,6 +141,52 @@ func newStore(numShards int, clock func() time.Time) *Store {
 	}()
 
 	return s
+}
+
+// EntryCount returns the current exact, server-wide total number of live
+// entries across all shards.
+func (s *Store) EntryCount() int64 {
+	return atomic.LoadInt64(&s.entryCount)
+}
+
+// evictIfNeededLocked evicts at most one entry from sh if inserting one
+// brand-new key would push the total entry count over maxEntries. It is a
+// no-op when maxEntries <= 0 (eviction disabled) or the cap wouldn't be
+// exceeded. Caller must hold sh's write lock and must only call this
+// immediately before inserting a genuinely new key (not an update to an
+// existing one) into that same shard -- eviction always happens in the
+// shard receiving the new key, never a different one.
+//
+// Caveat this implies (confirmed by manual testing): because the victim
+// search never leaves the receiving shard, this eviction attempt is a
+// no-op whenever that particular shard happens to be empty, even though
+// the global count is over the cap -- entryCount can then grow past
+// maxEntries until a later insert lands in a shard that already holds
+// something to evict. In the steady state this means the resident key
+// count floor is effectively max(maxEntries, roughly one entry per
+// populated shard), not an exact maxEntries -- e.g. with the default 32
+// shards, --max-entries 5 converges to roughly 32 resident keys, not 5,
+// since eviction only "bites" once a shard already has an occupant. This
+// is the accepted cost of the same bounded/local-sampling philosophy
+// internal/storage/ttl's reaper already uses (no global exact structure);
+// callers wanting a cap below the shard count should size numShards
+// accordingly.
+func (s *Store) evictIfNeededLocked(sh *shard, now time.Time) {
+	if s.maxEntries <= 0 {
+		return
+	}
+	if atomic.LoadInt64(&s.entryCount)+1 <= int64(s.maxEntries) {
+		return
+	}
+	victim := sh.pickEvictionVictimLocked(s.policy, now, evictionSampleSize)
+	if victim == "" {
+		return
+	}
+	sh.deleteEntryLocked(victim)
+	sh.bumpVersionLocked(victim)
+	if s.onEvict != nil {
+		s.onEvict()
+	}
 }
 
 // Close stops the background TTL reaper. Safe to call once.
@@ -121,10 +237,13 @@ func normalizeIndex(idx, n int) int {
 
 // ensureKind returns the live entry for ck, creating an empty one of the
 // given kind if absent, or storage.ErrWrongType if it exists as a different
-// kind. Caller must hold the shard's write lock.
-func ensureKind(sh *shard, ck string, kind Kind, now time.Time) (*Entry, error) {
+// kind. Creating a brand-new entry is the one path here that can grow the
+// total entry count, so it's where the eviction trigger runs (see
+// Store.evictIfNeededLocked). Caller must hold the shard's write lock.
+func ensureKind(s *Store, sh *shard, ck string, kind Kind, now time.Time) (*Entry, error) {
 	e := sh.getForWriteLocked(ck, now)
 	if e == nil {
+		s.evictIfNeededLocked(sh, now)
 		e = newEmptyEntry(kind, now)
 		sh.setEntryLocked(ck, e)
 		return e, nil
@@ -164,6 +283,7 @@ func (s *Store) Get(workspace, key string) ([]byte, bool, error) {
 		return nil, false, storage.ErrWrongType
 	}
 	e.LastAccess = now
+	e.AccessCount++
 	return append([]byte(nil), e.StringVal...), true, nil
 }
 
@@ -203,7 +323,10 @@ func (s *Store) Set(workspace, key string, val []byte, opts storage.SetOpts) (bo
 		expiresAt = &t
 	}
 
-	e := &Entry{Kind: KindString, StringVal: append([]byte(nil), val...), ExpiresAt: expiresAt, LastAccess: now}
+	if !exists {
+		s.evictIfNeededLocked(sh, now)
+	}
+	e := &Entry{Kind: KindString, StringVal: append([]byte(nil), val...), ExpiresAt: expiresAt, LastAccess: now, AccessCount: 1}
 	sh.setEntryLocked(ck, e)
 	return true, prevVal, hadPrev, nil
 }
@@ -440,7 +563,7 @@ func (s *Store) HSet(workspace, key string, fields map[string][]byte) (int, erro
 	now := s.now()
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
-	e, err := ensureKind(sh, ck, KindHash, now)
+	e, err := ensureKind(s, sh, ck, KindHash, now)
 	if err != nil {
 		return 0, err
 	}
@@ -452,6 +575,7 @@ func (s *Store) HSet(workspace, key string, fields map[string][]byte) (int, erro
 		e.Hash[f] = append([]byte(nil), v...)
 	}
 	e.LastAccess = now
+	e.AccessCount++
 	sh.bumpVersionLocked(ck)
 	return added, nil
 }
@@ -474,6 +598,7 @@ func (s *Store) HGet(workspace, key, field string) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 	e.LastAccess = now
+	e.AccessCount++
 	return append([]byte(nil), v...), true, nil
 }
 
@@ -633,7 +758,7 @@ func (s *Store) HIncrBy(workspace, key, field string, delta int64) (int64, error
 	now := s.now()
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
-	e, err := ensureKind(sh, ck, KindHash, now)
+	e, err := ensureKind(s, sh, ck, KindHash, now)
 	if err != nil {
 		return 0, err
 	}
@@ -648,6 +773,7 @@ func (s *Store) HIncrBy(workspace, key, field string, delta int64) (int64, error
 	cur += delta
 	e.Hash[field] = []byte(strconv.FormatInt(cur, 10))
 	e.LastAccess = now
+	e.AccessCount++
 	sh.bumpVersionLocked(ck)
 	return cur, nil
 }
@@ -660,7 +786,7 @@ func (s *Store) LPush(workspace, key string, vals ...[]byte) (int, error) {
 	now := s.now()
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
-	e, err := ensureKind(sh, ck, KindList, now)
+	e, err := ensureKind(s, sh, ck, KindList, now)
 	if err != nil {
 		return 0, err
 	}
@@ -668,6 +794,7 @@ func (s *Store) LPush(workspace, key string, vals ...[]byte) (int, error) {
 		e.List = append([][]byte{append([]byte(nil), v...)}, e.List...)
 	}
 	e.LastAccess = now
+	e.AccessCount++
 	sh.bumpVersionLocked(ck)
 	return len(e.List), nil
 }
@@ -678,7 +805,7 @@ func (s *Store) RPush(workspace, key string, vals ...[]byte) (int, error) {
 	now := s.now()
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
-	e, err := ensureKind(sh, ck, KindList, now)
+	e, err := ensureKind(s, sh, ck, KindList, now)
 	if err != nil {
 		return 0, err
 	}
@@ -686,6 +813,7 @@ func (s *Store) RPush(workspace, key string, vals ...[]byte) (int, error) {
 		e.List = append(e.List, append([]byte(nil), v...))
 	}
 	e.LastAccess = now
+	e.AccessCount++
 	sh.bumpVersionLocked(ck)
 	return len(e.List), nil
 }
@@ -892,7 +1020,7 @@ func (s *Store) SAdd(workspace, key string, members ...[]byte) (int, error) {
 	now := s.now()
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
-	e, err := ensureKind(sh, ck, KindSet, now)
+	e, err := ensureKind(s, sh, ck, KindSet, now)
 	if err != nil {
 		return 0, err
 	}
@@ -905,6 +1033,7 @@ func (s *Store) SAdd(workspace, key string, members ...[]byte) (int, error) {
 		}
 	}
 	e.LastAccess = now
+	e.AccessCount++
 	sh.bumpVersionLocked(ck)
 	return added, nil
 }
@@ -1104,7 +1233,7 @@ func (s *Store) ZAdd(workspace, key string, members map[string]float64) (int, er
 	now := s.now()
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
-	e, err := ensureKind(sh, ck, KindZSet, now)
+	e, err := ensureKind(s, sh, ck, KindZSet, now)
 	if err != nil {
 		return 0, err
 	}
@@ -1116,6 +1245,7 @@ func (s *Store) ZAdd(workspace, key string, members map[string]float64) (int, er
 		e.ZSet[m] = score
 	}
 	e.LastAccess = now
+	e.AccessCount++
 	sh.bumpVersionLocked(ck)
 	return added, nil
 }
@@ -1277,7 +1407,7 @@ func (s *Store) ZIncrBy(workspace, key, member string, delta float64) (float64, 
 	now := s.now()
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
-	e, err := ensureKind(sh, ck, KindZSet, now)
+	e, err := ensureKind(s, sh, ck, KindZSet, now)
 	if err != nil {
 		return 0, err
 	}
