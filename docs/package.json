@@ -8,7 +8,8 @@
     "generate-commands": "node .vitepress/generate-commands.mjs",
     "docs:dev": "npm run generate-commands && vitepress dev .",
     "docs:build": "npm run generate-commands && vitepress build .",
-    "docs:preview": "vitepress preview ."
+    "docs:preview": "vitepress preview .",
+    "build": "npm run docs:build"
   },
   "devDependencies": {
     "vitepress": "^1.3.4"
