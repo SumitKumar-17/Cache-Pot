@@ -377,6 +377,11 @@
   phase: 1
   status: real
   summary: Subscribe to channels matching a glob pattern
+- name: PUNSUBSCRIBE
+  category: pubsub
+  phase: 1
+  status: real
+  summary: Unsubscribe from one or more patterns (or all, if none given)
 
 - name: MULTI
   category: transactions

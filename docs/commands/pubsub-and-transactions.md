@@ -12,6 +12,7 @@ Every command on this page is implemented today.
 | `UNSUBSCRIBE` | Unsubscribe from one or more channels (or all, if none given) |
 | `PUBLISH` | Publish a message to a channel |
 | `PSUBSCRIBE` | Subscribe to channels matching a glob pattern |
+| `PUNSUBSCRIBE` | Unsubscribe from one or more patterns (or all, if none given) |
 
 ```bash
 # terminal 1

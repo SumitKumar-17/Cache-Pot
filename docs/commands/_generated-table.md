@@ -75,6 +75,7 @@
 | `UNSUBSCRIBE` | pubsub | 1 | ✅ Real | Unsubscribe from one or more channels (or all, if none given) |
 | `PUBLISH` | pubsub | 1 | ✅ Real | Publish a message to a channel |
 | `PSUBSCRIBE` | pubsub | 1 | ✅ Real | Subscribe to channels matching a glob pattern |
+| `PUNSUBSCRIBE` | pubsub | 1 | ✅ Real | Unsubscribe from one or more patterns (or all, if none given) |
 | `MULTI` | transactions | 1 | ✅ Real | Begin queueing commands for atomic execution |
 | `EXEC` | transactions | 1 | ✅ Real | Execute all commands queued since MULTI |
 | `DISCARD` | transactions | 1 | ✅ Real | Discard all commands queued since MULTI |
@@ -96,4 +97,4 @@
 | `GRAPH.RELATED` | knowledge-graph | 6 | ✅ Real | Find nodes related to a given node in the knowledge graph (BFS, undirected) |
 | `MEMORY.HISTORY` | versioning | 7 | 🔶 Planned | Fetch the version history of a memory item |
 
-*92 commands total: 91 real, 1 planned. Generated from `api/commands.yaml`.*
+*93 commands total: 92 real, 1 planned. Generated from `api/commands.yaml`.*

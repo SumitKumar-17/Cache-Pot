@@ -1,11 +1,13 @@
 package resp
 
-// RegisterPubSub adds SUBSCRIBE, UNSUBSCRIBE, PUBLISH, and PSUBSCRIBE to r.
+// RegisterPubSub adds SUBSCRIBE, UNSUBSCRIBE, PUBLISH, PSUBSCRIBE, and
+// PUNSUBSCRIBE to r.
 func RegisterPubSub(r *Registry) {
 	r.Register(&Command{Name: "SUBSCRIBE", MinArgs: 2, MaxArgs: -1, NoQueue: true, Handler: handleSubscribe})
 	r.Register(&Command{Name: "UNSUBSCRIBE", MinArgs: 1, MaxArgs: -1, NoQueue: true, Handler: handleUnsubscribe})
 	r.Register(&Command{Name: "PUBLISH", MinArgs: 3, MaxArgs: 3, Handler: handlePublish})
 	r.Register(&Command{Name: "PSUBSCRIBE", MinArgs: 2, MaxArgs: -1, NoQueue: true, Handler: handlePSubscribe})
+	r.Register(&Command{Name: "PUNSUBSCRIBE", MinArgs: 1, MaxArgs: -1, NoQueue: true, Handler: handlePUnsubscribe})
 }
 
 func ensureSubscriberState(cs *ClientState) {
@@ -106,6 +108,36 @@ func handleUnsubscribe(cs *ClientState, args []string) Reply {
 			}
 			count := len(cs.Subscriptions) + len(cs.PSubscriptions)
 			rep := Array(BulkString("unsubscribe"), BulkString(ch), Int(int64(count)))
+			if err := rep(w); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// handlePUnsubscribe is PSUBSCRIBE's counterpart, mirroring handleUnsubscribe's
+// structure exactly but over pattern subscriptions.
+func handlePUnsubscribe(cs *ClientState, args []string) Reply {
+	patterns := args[1:]
+	if len(patterns) == 0 {
+		for pat := range cs.PSubscriptions {
+			patterns = append(patterns, pat)
+		}
+	}
+	return func(w *Writer) error {
+		if len(patterns) == 0 {
+			count := len(cs.Subscriptions) + len(cs.PSubscriptions)
+			rep := Array(BulkString("punsubscribe"), NullBulk(), Int(int64(count)))
+			return rep(w)
+		}
+		for _, pat := range patterns {
+			delete(cs.PSubscriptions, pat)
+			if cs.subCh != nil {
+				cs.Deps.PubSub.UnsubscribePattern(cs, pat)
+			}
+			count := len(cs.Subscriptions) + len(cs.PSubscriptions)
+			rep := Array(BulkString("punsubscribe"), BulkString(pat), Int(int64(count)))
 			if err := rep(w); err != nil {
 				return err
 			}
