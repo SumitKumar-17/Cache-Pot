@@ -36,6 +36,9 @@ type Metrics struct {
 	memoryWrites        atomic.Int64
 	evictionsTotal      atomic.Int64
 
+	consolidationsTotal  atomic.Int64
+	memoriesDedupedTotal atomic.Int64
+
 	mcpCallsTotal  atomic.Int64
 	mcpMu          sync.Mutex
 	mcpCallsByTool map[string]int64
@@ -136,6 +139,20 @@ func (m *Metrics) MemoryRead() { m.memoryReads.Add(1) }
 
 // MemoryWrite records one agent-memory write (MEMORY.PUT or AGENT.REMEMBER).
 func (m *Metrics) MemoryWrite() { m.memoryWrites.Add(1) }
+
+// ConsolidationPerformed records one SUMMARY.CREATE RESP command or
+// "consolidate" MCP tool invocation that actually ran Consolidator.
+// Consolidate (i.e. reached internal/consolidate, regardless of whether
+// there turned out to be anything to summarize).
+func (m *Metrics) ConsolidationPerformed() { m.consolidationsTotal.Add(1) }
+
+// MemoriesDeduped records n source memories dropped as near-duplicates
+// during one Consolidate call's dedup pass (n may be 0 -- e.g. every
+// source memory was distinct, or there was nothing to summarize at all).
+// This never reflects a deletion: internal/consolidate's dedup pass is
+// deliberately non-destructive, so n only ever describes memories excluded
+// from a summarization prompt, not memories removed from the store.
+func (m *Metrics) MemoriesDeduped(n int64) { m.memoriesDedupedTotal.Add(n) }
 
 // KeyEvicted records one key evicted by internal/storage/memstore's
 // maxmemory-style bounded-size trigger. It's a plain no-argument callback
@@ -251,6 +268,9 @@ type Snapshot struct {
 	MemoryWritesTotal   int64
 	EvictionsTotal      int64
 
+	ConsolidationsTotal  int64
+	MemoriesDedupedTotal int64
+
 	MCPCallsTotal  int64
 	MCPCallsByTool map[string]int64
 
@@ -304,6 +324,9 @@ func (m *Metrics) Snapshot() Snapshot {
 		MemoryReadsTotal:    m.memoryReads.Load(),
 		MemoryWritesTotal:   m.memoryWrites.Load(),
 		EvictionsTotal:      m.evictionsTotal.Load(),
+
+		ConsolidationsTotal:  m.consolidationsTotal.Load(),
+		MemoriesDedupedTotal: m.memoriesDedupedTotal.Load(),
 
 		MCPCallsTotal:  m.mcpCallsTotal.Load(),
 		MCPCallsByTool: byTool,

@@ -28,6 +28,7 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
+	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
@@ -53,6 +54,12 @@ const (
 	defaultMemoryKind      = memory.LongTerm
 	defaultMemorySearchK   = 10
 
+	// defaultSummaryKind mirrors
+	// internal/server/resp/handlers_consolidate.go's own default: episodic
+	// memories are exactly what Phase 6's roadmap describes consolidating
+	// into long-term summaries.
+	defaultSummaryKind = memory.Episodic
+
 	serverName    = "cachepot"
 	serverVersion = "0.3.0"
 )
@@ -70,6 +77,7 @@ type Server struct {
 	toolCache     *toolcache.ToolCache
 	vectorStore   *vector.Store
 	memoryStore   *memory.Store
+	consolidator  *consolidate.Consolidator
 	metrics       *observability.Metrics
 	analytics     *analytics.Tracker
 
@@ -79,20 +87,22 @@ type Server struct {
 // New builds an MCP Server backed by the given shared cache/store instances.
 // Callers (internal/server/server.go) must pass the exact same objects used
 // to build resp.Deps -- constructing new semantic.SemanticCache/
-// semantic.PromptCache/toolcache.ToolCache/vector.Store/memory.Store
-// instances here instead would silently create a second, disconnected
-// memory space, defeating the entire point of "no adapter layer". metrics
-// should likewise be the same *observability.Metrics the RESP listener
-// records into, so /metrics and /stats reflect both protocols' traffic;
-// tracker should likewise be the same *analytics.Tracker, so money-saved
-// and embedding-cost figures reflect both protocols' traffic too.
-func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store, metrics *observability.Metrics, tracker *analytics.Tracker) *Server {
+// semantic.PromptCache/toolcache.ToolCache/vector.Store/memory.Store/
+// consolidate.Consolidator instances here instead would silently create a
+// second, disconnected memory space, defeating the entire point of "no
+// adapter layer". metrics should likewise be the same *observability.Metrics
+// the RESP listener records into, so /metrics and /stats reflect both
+// protocols' traffic; tracker should likewise be the same
+// *analytics.Tracker, so money-saved and embedding-cost figures reflect
+// both protocols' traffic too.
+func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store, consolidator *consolidate.Consolidator, metrics *observability.Metrics, tracker *analytics.Tracker) *Server {
 	s := &Server{
 		semanticCache: semanticCache,
 		promptCache:   promptCache,
 		toolCache:     toolCache,
 		vectorStore:   vectorStore,
 		memoryStore:   memoryStore,
+		consolidator:  consolidator,
 		metrics:       metrics,
 		analytics:     tracker,
 	}
@@ -100,11 +110,12 @@ func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCach
 		Name:    serverName,
 		Version: serverVersion,
 	}, &sdkmcp.ServerOptions{
-		Instructions: "Cache-Pot exposes its semantic/prompt/tool response caches, native vector store, and shared agent memory (remember/recall) as MCP tools, backed by the exact same in-memory state as its RESP server.",
+		Instructions: "Cache-Pot exposes its semantic/prompt/tool response caches, native vector store, shared agent memory (remember/recall), and memory consolidation (consolidate) as MCP tools, backed by the exact same in-memory state as its RESP server.",
 	})
 	s.registerCacheTools()
 	s.registerVectorTools()
 	s.registerMemoryTools()
+	s.registerConsolidateTools()
 	return s
 }
 
@@ -626,4 +637,68 @@ func (s *Server) registerMemoryTools() {
 		Name:        "recall",
 		Description: "Recall this agent's own past memories relevant to a query, ranked by semantic similarity. Never returns another agent's memories. Backed by the same memory.Store instance as the AGENT.RECALL RESP command.",
 	}, s.recall)
+}
+
+// ---- SUMMARY.CREATE / consolidate ----
+
+// ConsolidateInput is the input for consolidate, mirroring
+// SUMMARY.CREATE <agent_id> [WORKSPACE <workspace>] [KIND <kind>]
+// [DEDUP_THRESHOLD <float>].
+type ConsolidateInput struct {
+	AgentID string `json:"agent_id" jsonschema:"id of the agent whose memories to consolidate"`
+	// Workspace and Kind default to "default" and "episodic" respectively
+	// when empty, matching SUMMARY.CREATE's defaults when
+	// WORKSPACE/KIND are omitted.
+	Workspace string `json:"workspace,omitempty" jsonschema:"workspace to consolidate within; defaults to \"default\" if omitted or empty"`
+	Kind      string `json:"kind,omitempty" jsonschema:"memory kind to consolidate: \"short_term\", \"long_term\", \"episodic\" (default), or \"semantic\""`
+	// DedupThreshold is a plain float64 (not a pointer): 0/omitted and an
+	// explicit non-positive value are both treated identically by
+	// Consolidate (fall back to consolidate.DefaultDedupThreshold), so
+	// there's no meaningful "omitted vs. zero" distinction to preserve
+	// here, unlike CacheSemanticGetInput.Threshold above.
+	DedupThreshold float64 `json:"dedup_threshold,omitempty" jsonschema:"minimum cosine similarity in [-1,1] for two memories to be treated as duplicates during the (non-destructive) dedup pass; omitted or <=0 uses consolidate.DefaultDedupThreshold (0.95)"`
+}
+
+// ConsolidateOutput is the output for consolidate. SummaryID is empty when
+// there was nothing to summarize (SourceCount == 0) -- not an error.
+type ConsolidateOutput struct {
+	SummaryID    string `json:"summary_id,omitempty"`
+	SourceCount  int    `json:"source_count"`
+	DedupedCount int    `json:"deduped_count"`
+}
+
+func (s *Server) consolidate(ctx context.Context, _ *sdkmcp.CallToolRequest, in ConsolidateInput) (*sdkmcp.CallToolResult, ConsolidateOutput, error) {
+	s.metrics.MCPCallRecorded("consolidate")
+	workspace := in.Workspace
+	if workspace == "" {
+		workspace = defaultMemoryWorkspace
+	}
+	kind := defaultSummaryKind
+	if in.Kind != "" {
+		k, ok := memory.ParseKind(in.Kind)
+		if !ok {
+			return nil, ConsolidateOutput{}, fmt.Errorf("mcp: unknown kind %q (want \"short_term\", \"long_term\", \"episodic\", or \"semantic\")", in.Kind)
+		}
+		kind = k
+	}
+
+	result, err := s.consolidator.Consolidate(ctx, workspace, in.AgentID, kind, in.DedupThreshold)
+	if err != nil {
+		return nil, ConsolidateOutput{}, err
+	}
+	s.metrics.ConsolidationPerformed()
+	s.metrics.MemoriesDeduped(int64(result.SourceCount - result.DedupedCount))
+
+	return nil, ConsolidateOutput{
+		SummaryID:    result.SummaryID,
+		SourceCount:  result.SourceCount,
+		DedupedCount: result.DedupedCount,
+	}, nil
+}
+
+func (s *Server) registerConsolidateTools() {
+	sdkmcp.AddTool(s.sdk, &sdkmcp.Tool{
+		Name:        "consolidate",
+		Description: "Consolidate an agent's memories of a given kind (default \"episodic\") into a single new long_term summary memory: lists every matching memory, deduplicates near-identical ones by embedding similarity (non-destructively -- nothing is ever deleted from the store), and summarizes the deduplicated set via the shared CompletionProvider. Returns an empty summary_id (and source_count 0) if there was nothing to summarize. Backed by the same internal/consolidate.Consolidator as the SUMMARY.CREATE RESP command.",
+	}, s.consolidate)
 }

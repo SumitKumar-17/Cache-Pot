@@ -18,6 +18,7 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/eviction"
 	"github.com/SumitKumar-17/cache-pot/internal/llm"
@@ -111,6 +112,14 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	registry := resp.NewRegistry()
 	resp.RegisterAll(registry)
 
+	// Constructed once here, then shared: Consolidator (Phase 6's memory
+	// consolidation, internal/consolidate) reads and writes through this
+	// exact memoryStore instance and calls this exact completionProvider,
+	// the same "construct once, pass shared instances in" discipline every
+	// prior phase in this file follows.
+	memoryStore := memory.New(provider)
+	consolidator := consolidate.New(memoryStore, completionProvider)
+
 	s.deps = &resp.Deps{
 		Engine:             engine,
 		Auth:               auth.New(s.cfg.Password),
@@ -122,9 +131,10 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		PromptCache:        semantic.NewPromptCache(),
 		ToolCache:          toolcache.New(),
 		VectorStore:        vector.New(),
-		MemoryStore:        memory.New(provider),
+		MemoryStore:        memoryStore,
 		Analytics:          s.analytics,
 		CompletionProvider: completionProvider,
+		Consolidator:       consolidator,
 	}
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())
@@ -153,7 +163,7 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		if err != nil {
 			return fmt.Errorf("server: listen on MCP port %d: %w", s.cfg.MCPPort, err)
 		}
-		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore, s.metrics, s.analytics)
+		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore, s.deps.Consolidator, s.metrics, s.analytics)
 		mux := http.NewServeMux()
 		mux.Handle("/", mcpServer.Handler())
 		mux.Handle("/metrics", observability.MetricsHandler(s.metrics))

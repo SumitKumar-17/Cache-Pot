@@ -7,6 +7,7 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
@@ -57,12 +58,17 @@ type Deps struct {
 
 	// CompletionProvider is Cache-Pot's first text-*generation* provider
 	// (Phase 6, see internal/llm): chat-style completions, as opposed to
-	// the embeddings-only providers above. No RESP handler consumes it
-	// yet as of this commit -- it is threaded into Deps here so Phase 6's
-	// consolidation (real LLM summarization) and knowledge-graph
-	// (real entity/relationship extraction) work, landing in later
-	// commits, can reach it without another signature-threading pass.
+	// the embeddings-only providers above. It backs Consolidator below
+	// (constructed with this exact instance in internal/server/server.go);
+	// knowledge-graph (real entity/relationship extraction), landing in a
+	// later commit, will be Phase 6's other consumer.
 	CompletionProvider llm.CompletionProvider
+
+	// Consolidator backs SUMMARY.CREATE (see handlers_consolidate.go):
+	// Phase 6's memory-consolidation entry point, built once in
+	// internal/server/server.go from the same shared MemoryStore and
+	// CompletionProvider instances above.
+	Consolidator *consolidate.Consolidator
 }
 
 // ClientState is per-connection state: authentication, the selected

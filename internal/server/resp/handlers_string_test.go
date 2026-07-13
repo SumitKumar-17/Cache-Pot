@@ -7,7 +7,9 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
+	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
@@ -22,19 +24,23 @@ func newTestDeps(t *testing.T) *Deps {
 	t.Cleanup(func() { _ = engine.Close() })
 	registry := NewRegistry()
 	RegisterAll(registry)
+	memoryStore := memory.New(embed.NewMock(8))
+	completionProvider := llm.NewMock()
 	return &Deps{
-		Engine:        engine,
-		Auth:          auth.New(""),
-		Metrics:       observability.NewMetrics(),
-		Logger:        observability.NewLogger(slog.LevelError),
-		PubSub:        NewPubSub(),
-		Registry:      registry,
-		SemanticCache: semantic.New(embed.NewMock(8)),
-		PromptCache:   semantic.NewPromptCache(),
-		ToolCache:     toolcache.New(),
-		VectorStore:   vector.New(),
-		MemoryStore:   memory.New(embed.NewMock(8)),
-		Analytics:     analytics.New(),
+		Engine:             engine,
+		Auth:               auth.New(""),
+		Metrics:            observability.NewMetrics(),
+		Logger:             observability.NewLogger(slog.LevelError),
+		PubSub:             NewPubSub(),
+		Registry:           registry,
+		SemanticCache:      semantic.New(embed.NewMock(8)),
+		PromptCache:        semantic.NewPromptCache(),
+		ToolCache:          toolcache.New(),
+		VectorStore:        vector.New(),
+		MemoryStore:        memoryStore,
+		Analytics:          analytics.New(),
+		CompletionProvider: completionProvider,
+		Consolidator:       consolidate.New(memoryStore, completionProvider),
 	}
 }
 

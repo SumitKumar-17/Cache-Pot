@@ -49,6 +49,16 @@ type SearchResult struct {
 	Score float64
 }
 
+// ListOptions configures Store.List's filtering.
+type ListOptions struct {
+	// AgentID, if non-empty, restricts the result to that agent's own
+	// memories. Empty means every agent in the workspace.
+	AgentID string
+
+	// Kind, if non-nil, restricts the result to that memory kind.
+	Kind *Kind
+}
+
 // MemoryStore is the Phase 4 seam for shared agent memory: put/get a
 // memory, search over memories by embedding similarity (optionally scoped
 // to an agent and/or kind), and fetch a memory's version history (Phase 7 --
@@ -78,6 +88,19 @@ type MemoryStore interface {
 	// History always returns ErrHistoryNotImplemented in Phase 4 -- see
 	// this package's doc comment.
 	History(ctx context.Context, workspaceID, id string) ([]Memory, error)
+
+	// List returns every memory in workspaceID matching opts's AgentID/Kind
+	// filters, as full Memory records including each one's stored
+	// Embedding. Unlike Search, this needs no query string to embed and
+	// rank against -- it's the entry point Phase 6's consolidation
+	// (internal/consolidate) uses to gather every memory matching
+	// (workspace, agent, kind) so it can compare their embeddings directly
+	// for deduplication, rather than re-embedding everything or going
+	// through Search's query-based ranking path. Order is unspecified;
+	// callers that need a particular order (e.g. by CreatedAt) must sort
+	// the result themselves. An empty/no-match result returns a nil slice,
+	// not an error.
+	List(ctx context.Context, workspaceID string, opts ListOptions) ([]Memory, error)
 }
 
 // Store is the concrete, in-memory MemoryStore implementation. It embeds
@@ -288,4 +311,33 @@ func (s *Store) Search(ctx context.Context, workspaceID, query string, opts Sear
 // slice that would look like real history support.
 func (s *Store) History(ctx context.Context, workspaceID, id string) ([]Memory, error) {
 	return nil, ErrHistoryNotImplemented
+}
+
+// List implements MemoryStore.List.
+func (s *Store) List(ctx context.Context, workspaceID string, opts ListOptions) ([]Memory, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ws, ok := s.records[workspaceID]
+	if !ok {
+		return nil, nil
+	}
+
+	now := s.now()
+	var out []Memory
+	for id, rec := range ws {
+		if rec.expired(now) {
+			delete(ws, id)
+			s.vecStore.Delete(workspaceID, id)
+			continue
+		}
+		if opts.AgentID != "" && rec.AgentID != opts.AgentID {
+			continue
+		}
+		if opts.Kind != nil && rec.Kind != *opts.Kind {
+			continue
+		}
+		out = append(out, *rec)
+	}
+	return out, nil
 }

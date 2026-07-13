@@ -15,7 +15,9 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
+	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
@@ -34,12 +36,15 @@ type testEnv struct {
 	cs  *sdkmcp.ClientSession
 	ctx context.Context
 
-	semanticCache *semantic.SemanticCache
-	promptCache   *semantic.PromptCache
-	toolCache     *toolcache.ToolCache
-	vectorStore   *vector.Store
-	memoryStore   *memory.Store
-	analytics     *analytics.Tracker
+	semanticCache      *semantic.SemanticCache
+	promptCache        *semantic.PromptCache
+	toolCache          *toolcache.ToolCache
+	vectorStore        *vector.Store
+	memoryStore        *memory.Store
+	completionProvider llm.CompletionProvider
+	consolidator       *consolidate.Consolidator
+	metrics            *observability.Metrics
+	analytics          *analytics.Tracker
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -50,9 +55,12 @@ func newTestEnv(t *testing.T) *testEnv {
 	toolCache := toolcache.New()
 	vectorStore := vector.New()
 	memoryStore := memory.New(embed.NewMock(8))
+	completionProvider := llm.NewMock()
+	consolidator := consolidate.New(memoryStore, completionProvider)
 	tracker := analytics.New()
+	metrics := observability.NewMetrics()
 
-	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore, observability.NewMetrics(), tracker)
+	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore, consolidator, metrics, tracker)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
@@ -66,16 +74,19 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(func() { _ = cs.Close() })
 
 	return &testEnv{
-		t:             t,
-		ts:            ts,
-		cs:            cs,
-		ctx:           ctx,
-		semanticCache: semanticCache,
-		promptCache:   promptCache,
-		toolCache:     toolCache,
-		vectorStore:   vectorStore,
-		memoryStore:   memoryStore,
-		analytics:     tracker,
+		t:                  t,
+		ts:                 ts,
+		cs:                 cs,
+		ctx:                ctx,
+		semanticCache:      semanticCache,
+		promptCache:        promptCache,
+		toolCache:          toolCache,
+		vectorStore:        vectorStore,
+		memoryStore:        memoryStore,
+		completionProvider: completionProvider,
+		consolidator:       consolidator,
+		metrics:            metrics,
+		analytics:          tracker,
 	}
 }
 
@@ -115,6 +126,7 @@ func TestListTools(t *testing.T) {
 		"cache_prompt_set",
 		"cache_semantic_get",
 		"cache_semantic_set",
+		"consolidate",
 		"delete_vector",
 		"find_similar",
 		"recall",
@@ -406,6 +418,68 @@ func TestRecallDoesNotLeakOtherAgentsMemories(t *testing.T) {
 	}
 }
 
+// TestConsolidateTool exercises the consolidate MCP tool end to end: it
+// remembers a few near-identical episodic memories plus one distinct one
+// for an agent, consolidates them, and confirms the result matches
+// SUMMARY.CREATE's own documented behavior (source/deduped counts, and the
+// new summary being a real, fetchable long_term memory via the shared
+// memoryStore instance -- proving the tool wrote through to the same store,
+// not a private copy).
+func TestConsolidateTool(t *testing.T) {
+	env := newTestEnv(t)
+
+	remember := func(agentID, content, kind string) {
+		env.call("remember", map[string]any{
+			"agent_id": agentID,
+			"content":  content,
+			"kind":     kind,
+		}, nil)
+	}
+	remember("agent-1", "user completed the onboarding flow", "episodic")
+	remember("agent-1", "User completed the onboarding flow", "episodic")
+	remember("agent-1", "the weather in paris is nice today", "episodic")
+
+	var out mcp.ConsolidateOutput
+	env.call("consolidate", map[string]any{"agent_id": "agent-1"}, &out)
+
+	if out.SourceCount != 3 {
+		t.Fatalf("consolidate: SourceCount = %d, want 3", out.SourceCount)
+	}
+	if out.DedupedCount != 2 {
+		t.Fatalf("consolidate: DedupedCount = %d, want 2 (2 near-duplicates collapsed to 1, plus 1 distinct)", out.DedupedCount)
+	}
+	if out.SummaryID == "" {
+		t.Fatal("consolidate: got empty summary_id, want a real id")
+	}
+
+	direct, found, err := env.memoryStore.Get(env.ctx, "default", out.SummaryID)
+	if err != nil {
+		t.Fatalf("direct memoryStore.Get: %v", err)
+	}
+	if !found {
+		t.Fatalf("direct memoryStore.Get: summary id %q not found in the shared store", out.SummaryID)
+	}
+	if direct.Kind != memory.LongTerm {
+		t.Fatalf("summary Kind = %v, want LongTerm", direct.Kind)
+	}
+}
+
+// TestConsolidateToolNothingToSummarize confirms the empty-input case
+// reports an empty summary_id and zero counts, not a tool error.
+func TestConsolidateToolNothingToSummarize(t *testing.T) {
+	env := newTestEnv(t)
+
+	var out mcp.ConsolidateOutput
+	env.call("consolidate", map[string]any{"agent_id": "agent-with-no-memories"}, &out)
+
+	if out.SummaryID != "" {
+		t.Fatalf("consolidate (no memories): SummaryID = %q, want empty", out.SummaryID)
+	}
+	if out.SourceCount != 0 || out.DedupedCount != 0 {
+		t.Fatalf("consolidate (no memories): got %+v, want SourceCount=0 DedupedCount=0", out)
+	}
+}
+
 // TestSharedStateWithRESP is the whole point of this package: it proves
 // there is no adapter layer or second storage between the MCP server and
 // the RESP server. It builds a real resp.Deps sharing the exact same
@@ -419,16 +493,18 @@ func TestSharedStateWithRESP(t *testing.T) {
 	registry := resp.NewRegistry()
 	resp.RegisterAll(registry)
 	deps := &resp.Deps{
-		Auth:          auth.New(""),
-		Metrics:       observability.NewMetrics(),
-		Logger:        observability.NewLogger(slog.LevelError),
-		PubSub:        resp.NewPubSub(),
-		Registry:      registry,
-		SemanticCache: env.semanticCache,
-		PromptCache:   env.promptCache,
-		ToolCache:     env.toolCache,
-		VectorStore:   env.vectorStore,
-		MemoryStore:   env.memoryStore,
+		Auth:               auth.New(""),
+		Metrics:            env.metrics,
+		Logger:             observability.NewLogger(slog.LevelError),
+		PubSub:             resp.NewPubSub(),
+		Registry:           registry,
+		SemanticCache:      env.semanticCache,
+		PromptCache:        env.promptCache,
+		ToolCache:          env.toolCache,
+		VectorStore:        env.vectorStore,
+		MemoryStore:        env.memoryStore,
+		CompletionProvider: env.completionProvider,
+		Consolidator:       env.consolidator,
 	}
 
 	clientConn, serverConn := net.Pipe()
@@ -499,6 +575,49 @@ func TestSharedStateWithRESP(t *testing.T) {
 	}
 	if !foundViaRESP {
 		t.Fatalf("RESP AGENT.RECALL after MCP remember: memory id %q not found in %v", rememberOut.ID, ids)
+	}
+
+	// Consolidation: RESP AGENT.REMEMBER (episodic) -> MCP consolidate ->
+	// RESP MEMORY.GET.
+	respClient.send("AGENT.REMEMBER consolidate-agent episodic-fact-one KIND episodic")
+	respClient.recvBulk()
+	respClient.send("AGENT.REMEMBER consolidate-agent episodic-fact-two KIND episodic")
+	respClient.recvBulk()
+
+	var consolidateOut mcp.ConsolidateOutput
+	env.call("consolidate", map[string]any{"agent_id": "consolidate-agent"}, &consolidateOut)
+	if consolidateOut.SourceCount != 2 {
+		t.Fatalf("MCP consolidate after RESP AGENT.REMEMBER: SourceCount = %d, want 2", consolidateOut.SourceCount)
+	}
+	if consolidateOut.SummaryID == "" {
+		t.Fatalf("MCP consolidate after RESP AGENT.REMEMBER: got empty summary_id")
+	}
+
+	respClient.send("MEMORY.GET default " + consolidateOut.SummaryID)
+	fields := respClient.recvArrayBulkStrings()
+	foundLongTerm := false
+	for i := 0; i+1 < len(fields); i += 2 {
+		if fields[i] == "kind" && fields[i+1] == "long_term" {
+			foundLongTerm = true
+		}
+	}
+	if !foundLongTerm {
+		t.Fatalf("RESP MEMORY.GET after MCP consolidate: fields %v, want a kind=long_term pair", fields)
+	}
+
+	// And the reverse direction: RESP SUMMARY.CREATE -> MCP-visible via the
+	// shared memoryStore instance.
+	respClient.send("SUMMARY.CREATE consolidate-agent")
+	summaryID := respClient.recvBulk()
+	if summaryID == "" {
+		t.Fatalf("RESP SUMMARY.CREATE: got empty id")
+	}
+	directSummary, foundDirect, err := env.memoryStore.Get(env.ctx, "default", summaryID)
+	if err != nil {
+		t.Fatalf("direct memoryStore.Get after RESP SUMMARY.CREATE: %v", err)
+	}
+	if !foundDirect || directSummary.Kind != memory.LongTerm {
+		t.Fatalf("direct memoryStore.Get after RESP SUMMARY.CREATE: got %+v, foundDirect=%v", directSummary, foundDirect)
 	}
 }
 

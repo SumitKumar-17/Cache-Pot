@@ -332,6 +332,131 @@ func TestGetTTLExpiryLazy(t *testing.T) {
 	}
 }
 
+func TestListFiltersByAgentAndKind(t *testing.T) {
+	s := newTestStore()
+	ctx := context.Background()
+
+	mustPut := func(id, agentID string, kind Kind, content string) {
+		if _, err := s.Put(ctx, Memory{
+			ID:          id,
+			AgentID:     agentID,
+			WorkspaceID: "default",
+			Kind:        kind,
+			Content:     content,
+		}, 0); err != nil {
+			t.Fatalf("Put %s: %v", id, err)
+		}
+	}
+
+	mustPut("a-epi-1", "agent-a", Episodic, "agent-a episodic 1")
+	mustPut("a-epi-2", "agent-a", Episodic, "agent-a episodic 2")
+	mustPut("a-long-1", "agent-a", LongTerm, "agent-a long-term")
+	mustPut("b-epi-1", "agent-b", Episodic, "agent-b episodic")
+
+	// AgentID + Kind filter: only agent-a's episodic memories.
+	kindEpisodic := Episodic
+	got, err := s.List(ctx, "default", ListOptions{AgentID: "agent-a", Kind: &kindEpisodic})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	gotIDs := make(map[string]bool, len(got))
+	for _, m := range got {
+		gotIDs[m.ID] = true
+		if m.Embedding == nil {
+			t.Errorf("List result %q has no Embedding, want the stored embedding to be included", m.ID)
+		}
+	}
+	want := map[string]bool{"a-epi-1": true, "a-epi-2": true}
+	if len(gotIDs) != len(want) {
+		t.Fatalf("List(agent-a, episodic) = %v, want %v", gotIDs, want)
+	}
+	for id := range want {
+		if !gotIDs[id] {
+			t.Errorf("List(agent-a, episodic) missing %q", id)
+		}
+	}
+	if gotIDs["a-long-1"] || gotIDs["b-epi-1"] {
+		t.Errorf("List(agent-a, episodic) leaked an excluded memory: %v", gotIDs)
+	}
+
+	// AgentID only (no Kind filter): every one of agent-a's memories.
+	gotAgentOnly, err := s.List(ctx, "default", ListOptions{AgentID: "agent-a"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(gotAgentOnly) != 3 {
+		t.Fatalf("List(agent-a, any kind) = %d results, want 3", len(gotAgentOnly))
+	}
+
+	// Neither filter: every memory in the workspace.
+	gotAll, err := s.List(ctx, "default", ListOptions{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(gotAll) != 4 {
+		t.Fatalf("List(no filters) = %d results, want 4", len(gotAll))
+	}
+}
+
+func TestListNoMatchReturnsNilSlice(t *testing.T) {
+	s := newTestStore()
+	ctx := context.Background()
+
+	got, err := s.List(ctx, "default", ListOptions{AgentID: "nobody"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("List (no match) = %v, want nil slice", got)
+	}
+
+	// An unknown workspace should behave the same way.
+	got, err = s.List(ctx, "no-such-workspace", ListOptions{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("List (unknown workspace) = %v, want nil slice", got)
+	}
+}
+
+func TestListExcludesExpiredMemories(t *testing.T) {
+	s := newTestStore()
+	ctx := context.Background()
+
+	fakeNow := time.Now()
+	s.now = func() time.Time { return fakeNow }
+
+	if _, err := s.Put(ctx, Memory{
+		ID:          "ephemeral",
+		AgentID:     "agent-1",
+		WorkspaceID: "default",
+		Kind:        Episodic,
+		Content:     "will expire",
+	}, 30*time.Second); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, err := s.Put(ctx, Memory{
+		ID:          "permanent",
+		AgentID:     "agent-1",
+		WorkspaceID: "default",
+		Kind:        Episodic,
+		Content:     "will not expire",
+	}, 0); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	s.now = func() time.Time { return fakeNow.Add(31 * time.Second) }
+
+	got, err := s.List(ctx, "default", ListOptions{AgentID: "agent-1"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "permanent" {
+		t.Fatalf("List after TTL expiry = %+v, want only the still-live \"permanent\" memory", got)
+	}
+}
+
 func TestHistoryNotImplemented(t *testing.T) {
 	s := newTestStore()
 	ctx := context.Background()
