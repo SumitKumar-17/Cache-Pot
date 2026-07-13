@@ -8,7 +8,11 @@ export default defineConfig({
   // _generated-table.md is a partial pulled into commands/index.md via a
   // markdown @include, not a standalone page — exclude it from routing so
   // it doesn't also get built as its own orphaned, unlinked route.
-  srcExclude: ["**/_generated-table.md"],
+  // AGENTS.md is contributor/agent guidance for working in this directory,
+  // not a public site page — exclude it too (it also links to ../AGENTS.md,
+  // which VitePress's dead-link checker can't resolve since that's outside
+  // the docs srcDir entirely).
+  srcExclude: ["**/_generated-table.md", "AGENTS.md"],
 
   themeConfig: {
     nav: [
