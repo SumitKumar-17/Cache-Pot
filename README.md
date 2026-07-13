@@ -9,16 +9,16 @@ It speaks the Redis protocol, so adopting it starts with swapping a connection s
 It grows into shared, semantic, versioned memory that every agent and model in your stack
 can read and write.
 
-> **Status: Phases 1-6.** Today, Cache-Pot is a real, working Redis-compatible cache
-> (RESP2, core data structures, TTL, transactions, pub/sub) plus semantic/prompt/tool
-> caching (`CACHE.SEMANTIC`, `CACHE.PROMPT`, `TOOL.CACHE`), a native vector store
-> (`VECTOR.UPSERT`/`SEARCH`/`DELETE`), shared agent memory (`MEMORY.*`, `AGENT.REMEMBER`/
-> `RECALL`), a native MCP server sharing all of that same memory, observability/cost
-> analytics/eviction (`/metrics`, `/stats`, `/dashboard`, `--max-entries`), and real
-> LLM-backed consolidation + a knowledge graph (`SUMMARY.CREATE`, `GRAPH.EXTRACT`/
-> `GRAPH.RELATED`, via a new completion-provider capability). Memory versioning and
-> multi-tenancy are designed and scoped, not yet built. See [ROADMAP.md](ROADMAP.md)
-> for the full arc and honest status of each pillar.
+> **Status: Phases 1-7 — the full original roadmap is complete.** Cache-Pot is a real,
+> working Redis-compatible cache (RESP2, core data structures, TTL, transactions,
+> pub/sub) plus semantic/prompt/tool caching (`CACHE.SEMANTIC`, `CACHE.PROMPT`,
+> `TOOL.CACHE`), a native vector store (`VECTOR.UPSERT`/`SEARCH`/`DELETE`), shared agent
+> memory (`MEMORY.*`, `AGENT.REMEMBER`/`RECALL`), a native MCP server sharing all of that
+> same memory, observability/cost analytics/eviction (`/metrics`, `/stats`, `/dashboard`,
+> `--max-entries`), real LLM-backed consolidation + a knowledge graph
+> (`SUMMARY.CREATE`, `GRAPH.EXTRACT`/`GRAPH.RELATED`), and real, enforced multi-tenancy
+> plus full memory version history (`--workspace-credentials`, `MEMORY.HISTORY`). See
+> [ROADMAP.md](ROADMAP.md) for the full arc and honest status of each pillar.
 
 ## Why not just Redis + Pinecone + Mem0?
 
@@ -31,6 +31,7 @@ can read and write.
 | Agent memory (semantic recall) | | | ✅ | | ✅ |
 | Shared memory across agents/models | | | partial | | ✅ |
 | Memory consolidation + knowledge graph | | | partial | | ✅ |
+| Multi-tenant isolation + memory versioning | | | partial | | ✅ |
 | Separate services to run & pay for | — | 2 | 3 | 4 | **1** |
 
 Cache-Pot's bet: these are not separate problems. They're one memory engine with
@@ -70,10 +71,10 @@ cd docs && npm install && npm run docs:dev
 
 ## Roadmap
 
-Cache-Pot is built in seven phases, from a Redis-compatible core to a fully versioned,
+Cache-Pot was built in seven phases, from a Redis-compatible core to a fully versioned,
 multi-tenant memory engine with semantic caching, native vector search, shared agent
-memory, cost analytics, and a knowledge graph. See [ROADMAP.md](ROADMAP.md) — Phases
-1-6 are done.
+memory, cost analytics, and a knowledge graph. See [ROADMAP.md](ROADMAP.md) — all seven
+phases are done.
 
 ## License
 

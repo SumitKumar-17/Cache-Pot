@@ -1,16 +1,18 @@
 # Contributing
 
-Cache-Pot is early — Phases 1-6 (see [ROADMAP.md](ROADMAP.md)) are done: the
+Cache-Pot's original seven-phase roadmap (see [ROADMAP.md](ROADMAP.md)) is complete: the
 Redis-compatible core, semantic/prompt/tool caching, a native vector store, shared
-agent memory, a native MCP server, observability/cost analytics/eviction, and real
-LLM-backed consolidation + a knowledge graph. Contributions are welcome, especially:
+agent memory, a native MCP server, observability/cost analytics/eviction, real
+LLM-backed consolidation + a knowledge graph, and real multi-tenant workspace isolation
++ full memory versioning. Contributions are welcome, especially:
 
 - Redis error-string compatibility fixes and Phase 1 command coverage gaps
 - Test coverage (unit tests per command, integration tests against real clients)
 - Documentation fixes in `docs/`
 - Real-world evaluation of `GRAPH.EXTRACT`/`SUMMARY.CREATE` output quality against
   `--completion-provider openai` — prompt tuning, extraction schema improvements
-- Phase 7 groundwork (memory versioning + multi-tenancy — see the roadmap)
+- Extending workspace enforcement to the MCP server (currently a documented gap — see
+  [Workspaces & Multi-Tenancy](docs/getting-started/workspaces.md))
 
 ## Development
 

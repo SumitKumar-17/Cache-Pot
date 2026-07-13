@@ -1,10 +1,10 @@
 # Roadmap
 
-Cache-Pot is being built in seven phases. Each phase is additive — later
-phases build on storage/vector/memory primitives introduced earlier — and
-each is honestly scoped rather than compressed to look smaller than it is.
-Phases 6 and 7 in particular are large, cross-cutting efforts and are
-treated as such below.
+Cache-Pot was built in seven phases, all now complete. Each phase is
+additive — later phases build on storage/vector/memory primitives introduced
+earlier — and each is honestly scoped rather than compressed to look smaller
+than it is. Phases 6 and 7 in particular were large, cross-cutting efforts
+and are treated as such below.
 
 Dependency chain: `1 → 2 → 3 → 4 → 5 → 6 → 7`.
 
@@ -63,9 +63,8 @@ See the [vector commands](/commands/vector) and
   via agent/workspace metadata — no artificial per-client silos:
   `MEMORY.SEARCH` with no `AGENT` filter searches every agent's memories in a
   workspace
-- Version is bumped on every `MEMORY.PUT` to the same id, but full version
-  history retrieval is deliberately not built here — that's Phase 7's
-  `MEMORY.HISTORY`
+- Version is bumped on every `MEMORY.PUT` to the same id; full version
+  history retrieval was added later in Phase 7's `MEMORY.HISTORY`
 
 See the [agent memory commands](/commands/memory) page.
 
@@ -116,17 +115,25 @@ embeddings).
 
 See the [Consolidation & Knowledge Graph commands](/commands/graph) page.
 
-## Phase 7 — Multi-Tenancy & Versioning Hardening *(planned — cross-cutting)*
+## Phase 7 — Multi-Tenancy & Versioning Hardening ✅ (cross-cutting)
 
-Depends on everything before it — this is fundamentally a retrofit of a
+Depended on everything before it — this was fundamentally a retrofit of a
 `workspace` dimension across every subsystem built in Phases 1-6, which is
-why it's scoped last rather than assumed free if bolted on early.
+why it was scoped last rather than assumed free if bolted on early.
 
-- Workspace isolation across KV keyspace, vector namespaces, memory store,
-  and graph
-- Full memory versioning: every write retrievable by history
-  (`MEMORY.HISTORY` / point-in-time reads — "what did the agent know
-  yesterday")
-- Per-workspace auth/ACL (growing from Phase 1's single shared password)
+- **Workspace isolation:** real, enforced via `--workspace-credentials`
+  (`workspace:password` pairs) — `AUTH` now determines which workspace a
+  connection is authorized for, and every workspace-scoped command
+  (`MEMORY.*`/`AGENT.*`/`VECTOR.*`/`GRAPH.*`) rejects a mismatched workspace
+  with `NOPERM`. Mutually exclusive with Phase 1's single shared
+  `--password`. `CACHE.SEMANTIC`/`CACHE.PROMPT`/`TOOL.CACHE` remain global,
+  unscoped caches by design; the native MCP server has no auth/workspace
+  enforcement at all — an honest, documented gap. See
+  [Workspaces & Multi-Tenancy](/getting-started/workspaces).
+- **Full memory versioning:** every `MEMORY.PUT` upsert keeps its prior
+  version (bounded to 100 per record), retrievable oldest-first via
+  `MEMORY.HISTORY <workspace> <id> [LIMIT <n>]`. History is purged when a
+  record expires (deliberate anti-leak choice, not a bug).
 
-See the [versioning commands](/commands/versioning) page.
+See the [versioning commands](/commands/versioning) and
+[Workspaces & Multi-Tenancy](/getting-started/workspaces) pages.

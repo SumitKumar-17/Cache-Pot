@@ -11,9 +11,10 @@ It's a single server that speaks the Redis protocol (RESP2) — so any existing 
 client works against it unmodified — and grows into semantic caching, native vector
 search, shared agent memory, cost analytics, and a knowledge graph, all sharing one
 in-memory state. See [README.md](README.md) for the full pitch and
-[ROADMAP.md](ROADMAP.md) for the phased plan. **Phases 1-6 of 7 are done and real** as
-of this writing — check `git log` and `ROADMAP.md` before assuming what's current, this
-will go stale.
+[ROADMAP.md](ROADMAP.md) for the phased plan. **All 7 phases of the original roadmap
+are done and real** as of this writing — check `git log` and `ROADMAP.md` before
+assuming what's current, this will go stale (e.g. new phases beyond the original 7 may
+have started since).
 
 ## Golden rule: never present planned work as real
 
@@ -42,7 +43,7 @@ cmd/cachepotd/main.go        entrypoint: flags/env -> server.Config -> server.Ru
 internal/server/             process wiring: RESP + MCP + /metrics/stats/dashboard listeners
 internal/server/resp/        RESP2 protocol, command dispatch, all handlers_*.go
 internal/storage/            Engine interface (the seam) + memstore (sharded KV impl) + ttl (active expiry)
-internal/auth/                single shared-password AUTH (Phase 1) — Phase 7 will make this per-workspace
+internal/auth/                single shared-password AUTH (Phase 1) or real per-workspace AUTH via --workspace-credentials (Phase 7)
 internal/embed/               embeddings: Provider interface, mock + OpenAI impls
 internal/llm/                 text GENERATION: CompletionProvider interface, mock + OpenAI chat impls
 internal/semantic/            CACHE.SEMANTIC (similarity) + CACHE.PROMPT (exact-match), on internal/embed
@@ -55,7 +56,6 @@ internal/mcp/                 native MCP server — same shared instances as res
 internal/observability/       Metrics (+/metrics, /stats, /dashboard), embed/completion instrumentation
 internal/analytics/           cost tracking: embedding/completion $ cost, opt-in COST-driven money-saved
 internal/eviction/            Policy interface (LRU, Weighted), consumed by memstore's --max-entries bound
-internal/tenancy/             Phase 7 skeleton only — not implemented yet
 docs/                          VitePress site, own package.json — see docs/AGENTS.md
 api/commands.yaml             source of truth for the whole command surface across all 7 phases
 ```
@@ -73,11 +73,12 @@ or similar instead of reusing the shared one, you've silently broken that guaran
 
 ## Conventions that recur across this codebase
 
-- **`workspace` is threaded through everything, first-parameter, even where only
-  `"default"` is ever passed today.** This is deliberate pre-wiring for Phase 7
-  multi-tenancy — don't remove it as "unused," and when you add a new store/command,
-  thread a `workspace string` parameter through it the same way, even if nothing
-  enforces it yet.
+- **`workspace` is threaded through everything, first-parameter.** This pre-wiring paid
+  off in Phase 7: real per-workspace AUTH enforcement
+  (`internal/auth`, `ClientState.authorizedForWorkspace`) was built entirely on top of
+  routing that already existed since Phase 1 — no storage call site changed. When you
+  add a new store/command, keep threading a `workspace string` parameter through it the
+  same way.
 - **Expand the interface/constructor, update every call site.** This project's normal
   way of adding a capability to an existing type is to widen its method signature or
   constructor and fix up every caller, rather than bolting on a parallel method. Look
@@ -148,14 +149,18 @@ what changed.
 ## Known, honest gaps (check before assuming something works)
 
 - No persistence: Cache-Pot Phase 1's core KV store is volatile, in-memory only.
-- MCP has no authentication layer yet — it doesn't gate by workspace/credentials the
-  way RESP's `AUTH` does.
+- MCP has no authentication layer at all — it doesn't gate by workspace/credentials the
+  way RESP's `AUTH` does, even with `--workspace-credentials` configured. See
+  `docs/getting-started/mcp-server.md` and `docs/getting-started/workspaces.md`.
 - Eviction (`--max-entries`) is approximate below the shard count (32 by default) — see
   `docs/getting-started/observability.md`'s eviction section for the verified numbers.
 - `GRAPH.EXTRACT`/`SUMMARY.CREATE` quality is entirely dependent on the configured
   completion provider; the default `mock` provider does no real language understanding.
-- Phase 7 (memory version history, real per-workspace isolation/auth) is the one phase
-  left on the original roadmap — check `ROADMAP.md` for current status.
+- `FLUSHALL` only flushes the caller's own workspace (same as `FLUSHDB`) — `Engine` has
+  no "list all workspaces" API, so there's no way to iterate every workspace
+  server-wide.
+- The original 7-phase roadmap is complete — check `ROADMAP.md` for anything started
+  beyond it.
 
 For deeper context on *why* a given piece of this exists, `git log --oneline` and the
 individual commit messages are unusually detailed on purpose — read them before

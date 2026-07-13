@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks through connecting to a running Cache-Pot server and exercising
-the Phase 1-6 commands that are real today. See
+the Phase 1-7 commands that are real today. See
 [Installation](/getting-started/installation) if you don't have a server
 running yet.
 
@@ -79,7 +79,7 @@ Any other RESP2 client (redis-py, ioredis, jedis, node-redis, etc.) works the
 same way — point it at Cache-Pot's host/port instead of Redis's.
 
 See the [command reference](/commands/) for the full list of what's
-implemented in Phase 1-6.
+implemented in Phase 1-7.
 
 ## Semantic and prompt caching (Phase 2)
 
@@ -170,7 +170,22 @@ no real language understanding, so `GRAPH.EXTRACT` against it honestly extracts
 nothing. Use `--completion-provider openai` for genuine summarization/extraction. See
 the [Consolidation & Knowledge Graph commands](/commands/graph) page.
 
-::: info Planned — Phase 7
-Full memory version history (`MEMORY.HISTORY`) and multi-tenancy aren't built yet. See
-the [roadmap](/roadmap/).
-:::
+## Workspaces and memory versioning (Phase 7)
+
+```bash
+redis-cli -p 6380 MEMORY.PUT research-bot "note v1" ID mem-1
+redis-cli -p 6380 MEMORY.PUT research-bot "note v2" ID mem-1
+redis-cli -p 6380 MEMORY.HISTORY default mem-1
+# -> both versions, oldest first
+
+./bin/cachepotd --workspace-credentials "acme:secret1,other:secret2"
+redis-cli -p 6380 -a secret1 MEMORY.PUT bot "note" WORKSPACE acme
+# OK -- this connection authenticated as "acme"
+redis-cli -p 6380 -a secret1 MEMORY.PUT bot "note" WORKSPACE other
+# (error) NOPERM this connection is not authorized for workspace "other"
+```
+
+See the [Versioning](/commands/versioning) and
+[Workspaces & Multi-Tenancy](/getting-started/workspaces) pages for the full
+command syntax and enforcement details — this completes the original
+seven-phase roadmap.
