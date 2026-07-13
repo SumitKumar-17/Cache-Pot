@@ -29,6 +29,8 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
+	"github.com/SumitKumar-17/cache-pot/internal/graph"
+	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
@@ -60,6 +62,12 @@ const (
 	// into long-term summaries.
 	defaultSummaryKind = memory.Episodic
 
+	// defaultGraphDepth mirrors
+	// internal/server/resp/handlers_graph.go's own default: GRAPH.RELATED's
+	// DEPTH, and internal/graph.Store.Related's own "depth <= 0 defaults to
+	// 1" behavior.
+	defaultGraphDepth = 1
+
 	serverName    = "cachepot"
 	serverVersion = "0.3.0"
 )
@@ -72,14 +80,16 @@ const (
 // an MCP client and a RESP client observe the same cache/vector-store/
 // memory contents.
 type Server struct {
-	semanticCache *semantic.SemanticCache
-	promptCache   *semantic.PromptCache
-	toolCache     *toolcache.ToolCache
-	vectorStore   *vector.Store
-	memoryStore   *memory.Store
-	consolidator  *consolidate.Consolidator
-	metrics       *observability.Metrics
-	analytics     *analytics.Tracker
+	semanticCache      *semantic.SemanticCache
+	promptCache        *semantic.PromptCache
+	toolCache          *toolcache.ToolCache
+	vectorStore        *vector.Store
+	memoryStore        *memory.Store
+	consolidator       *consolidate.Consolidator
+	graphStore         *graph.Store
+	completionProvider llm.CompletionProvider
+	metrics            *observability.Metrics
+	analytics          *analytics.Tracker
 
 	sdk *sdkmcp.Server
 }
@@ -88,34 +98,41 @@ type Server struct {
 // Callers (internal/server/server.go) must pass the exact same objects used
 // to build resp.Deps -- constructing new semantic.SemanticCache/
 // semantic.PromptCache/toolcache.ToolCache/vector.Store/memory.Store/
-// consolidate.Consolidator instances here instead would silently create a
-// second, disconnected memory space, defeating the entire point of "no
-// adapter layer". metrics should likewise be the same *observability.Metrics
-// the RESP listener records into, so /metrics and /stats reflect both
-// protocols' traffic; tracker should likewise be the same
-// *analytics.Tracker, so money-saved and embedding-cost figures reflect
-// both protocols' traffic too.
-func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store, consolidator *consolidate.Consolidator, metrics *observability.Metrics, tracker *analytics.Tracker) *Server {
+// consolidate.Consolidator/graph.Store instances here instead would silently
+// create a second, disconnected memory space, defeating the entire point of
+// "no adapter layer". metrics should likewise be the same
+// *observability.Metrics the RESP listener records into, so /metrics and
+// /stats reflect both protocols' traffic; tracker should likewise be the
+// same *analytics.Tracker, so money-saved and embedding-cost figures reflect
+// both protocols' traffic too. completionProvider must be the exact same
+// llm.CompletionProvider instance backing resp.Deps.CompletionProvider, so
+// extract_entities' knowledge-graph extraction shares the same instrumented
+// completion path (and therefore the same cost/metrics accounting) as
+// GRAPH.EXTRACT and consolidate/SUMMARY.CREATE.
+func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store, consolidator *consolidate.Consolidator, graphStore *graph.Store, completionProvider llm.CompletionProvider, metrics *observability.Metrics, tracker *analytics.Tracker) *Server {
 	s := &Server{
-		semanticCache: semanticCache,
-		promptCache:   promptCache,
-		toolCache:     toolCache,
-		vectorStore:   vectorStore,
-		memoryStore:   memoryStore,
-		consolidator:  consolidator,
-		metrics:       metrics,
-		analytics:     tracker,
+		semanticCache:      semanticCache,
+		promptCache:        promptCache,
+		toolCache:          toolCache,
+		vectorStore:        vectorStore,
+		memoryStore:        memoryStore,
+		consolidator:       consolidator,
+		graphStore:         graphStore,
+		completionProvider: completionProvider,
+		metrics:            metrics,
+		analytics:          tracker,
 	}
 	s.sdk = sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
 		Version: serverVersion,
 	}, &sdkmcp.ServerOptions{
-		Instructions: "Cache-Pot exposes its semantic/prompt/tool response caches, native vector store, shared agent memory (remember/recall), and memory consolidation (consolidate) as MCP tools, backed by the exact same in-memory state as its RESP server.",
+		Instructions: "Cache-Pot exposes its semantic/prompt/tool response caches, native vector store, shared agent memory (remember/recall), memory consolidation (consolidate), and a knowledge graph (extract_entities/find_related) as MCP tools, backed by the exact same in-memory state as its RESP server.",
 	})
 	s.registerCacheTools()
 	s.registerVectorTools()
 	s.registerMemoryTools()
 	s.registerConsolidateTools()
+	s.registerGraphTools()
 	return s
 }
 
@@ -701,4 +718,106 @@ func (s *Server) registerConsolidateTools() {
 		Name:        "consolidate",
 		Description: "Consolidate an agent's memories of a given kind (default \"episodic\") into a single new long_term summary memory: lists every matching memory, deduplicates near-identical ones by embedding similarity (non-destructively -- nothing is ever deleted from the store), and summarizes the deduplicated set via the shared CompletionProvider. Returns an empty summary_id (and source_count 0) if there was nothing to summarize. Backed by the same internal/consolidate.Consolidator as the SUMMARY.CREATE RESP command.",
 	}, s.consolidate)
+}
+
+// ---- GRAPH.EXTRACT / GRAPH.RELATED ----
+
+// ExtractEntitiesInput is the input for extract_entities, mirroring
+// GRAPH.EXTRACT <workspace> <memory_id>.
+type ExtractEntitiesInput struct {
+	Workspace string `json:"workspace,omitempty" jsonschema:"workspace the memory belongs to; defaults to \"default\" if omitted or empty"`
+	MemoryID  string `json:"memory_id" jsonschema:"id of the memory to extract entities/relationships from"`
+}
+
+// ExtractEntitiesOutput is the output for extract_entities. With the mock
+// CompletionProvider (the default unless a real one is configured), both
+// fields are always 0 -- see internal/graph/extract.go's doc comment on why
+// that's an honest "nothing extracted", not a failure.
+type ExtractEntitiesOutput struct {
+	EntitiesAdded  int `json:"entities_added"`
+	RelationsAdded int `json:"relations_added"`
+}
+
+func (s *Server) extractEntities(ctx context.Context, _ *sdkmcp.CallToolRequest, in ExtractEntitiesInput) (*sdkmcp.CallToolResult, ExtractEntitiesOutput, error) {
+	s.metrics.MCPCallRecorded("extract_entities")
+	workspace := in.Workspace
+	if workspace == "" {
+		workspace = defaultMemoryWorkspace
+	}
+
+	mem, found, err := s.memoryStore.Get(ctx, workspace, in.MemoryID)
+	if err != nil {
+		return nil, ExtractEntitiesOutput{}, err
+	}
+	if !found {
+		return nil, ExtractEntitiesOutput{}, fmt.Errorf("mcp: no such memory %q in workspace %q", in.MemoryID, workspace)
+	}
+
+	entities, relations, err := graph.Extract(ctx, s.completionProvider, s.graphStore, workspace, mem.ID, mem.Content)
+	if err != nil {
+		return nil, ExtractEntitiesOutput{}, err
+	}
+	s.metrics.GraphExtractionPerformed()
+	s.metrics.EntitiesExtracted(int64(entities))
+	s.metrics.RelationsExtracted(int64(relations))
+	return nil, ExtractEntitiesOutput{EntitiesAdded: entities, RelationsAdded: relations}, nil
+}
+
+// FindRelatedInput is the input for find_related, mirroring
+// GRAPH.RELATED <workspace> <node_id> [DEPTH <n>].
+type FindRelatedInput struct {
+	Workspace string `json:"workspace,omitempty" jsonschema:"workspace the node belongs to; defaults to \"default\" if omitted or empty"`
+	NodeID    string `json:"node_id" jsonschema:"id of the node to traverse from"`
+	// Depth is a plain int (not a pointer): unlike GRAPH.RELATED's RESP
+	// command, which treats an explicit non-positive DEPTH as a caller
+	// error, this tool simply falls back to defaultGraphDepth for any
+	// omitted-or-non-positive value -- there's no meaningful
+	// "omitted vs. zero" distinction worth preserving for an MCP client.
+	Depth int `json:"depth,omitempty" jsonschema:"max BFS hops from node_id, edges treated as undirected; defaults to 1 if omitted or <= 0"`
+}
+
+// FindRelatedMatch is one related node discovered by find_related.
+type FindRelatedMatch struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Hops  int    `json:"hops"`
+}
+
+// FindRelatedOutput is the output for find_related. Results is an empty
+// (never nil-vs-non-nil-distinguished, both marshal to `[]`) slice, not an
+// error, if node_id doesn't exist or has no related nodes within depth
+// hops.
+type FindRelatedOutput struct {
+	Results []FindRelatedMatch `json:"results"`
+}
+
+func (s *Server) findRelated(_ context.Context, _ *sdkmcp.CallToolRequest, in FindRelatedInput) (*sdkmcp.CallToolResult, FindRelatedOutput, error) {
+	s.metrics.MCPCallRecorded("find_related")
+	workspace := in.Workspace
+	if workspace == "" {
+		workspace = defaultMemoryWorkspace
+	}
+	depth := in.Depth
+	if depth <= 0 {
+		depth = defaultGraphDepth
+	}
+
+	related := s.graphStore.Related(workspace, in.NodeID, depth)
+	out := make([]FindRelatedMatch, len(related))
+	for i, r := range related {
+		out[i] = FindRelatedMatch{ID: r.Node.ID, Label: r.Node.Label, Hops: r.Hops}
+	}
+	return nil, FindRelatedOutput{Results: out}, nil
+}
+
+func (s *Server) registerGraphTools() {
+	sdkmcp.AddTool(s.sdk, &sdkmcp.Tool{
+		Name:        "extract_entities",
+		Description: "Extract notable entities and relationships from a stored memory's content via the shared CompletionProvider, recording them into Cache-Pot's native knowledge graph -- including a memory-provenance node with \"mentions\" edges to every extracted entity, so the graph stays traceable back to its source memory. With the mock CompletionProvider (no real LLM configured), this always reports 0 entities/relations added -- an honest degradation, not a failure. Backed by the same internal/graph.Store as the GRAPH.EXTRACT RESP command.",
+	}, s.extractEntities)
+
+	sdkmcp.AddTool(s.sdk, &sdkmcp.Tool{
+		Name:        "find_related",
+		Description: "Breadth-first traversal of Cache-Pot's native knowledge graph from a starting node, up to depth hops, treating edges as undirected for reachability (so a relationship is discoverable from either endpoint). Returns every distinct reachable node (excluding the start node itself), each with the hop count at which it was first discovered. Backed by the same internal/graph.Store as the GRAPH.RELATED RESP command.",
+	}, s.findRelated)
 }

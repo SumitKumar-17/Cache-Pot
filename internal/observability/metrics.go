@@ -39,6 +39,10 @@ type Metrics struct {
 	consolidationsTotal  atomic.Int64
 	memoriesDedupedTotal atomic.Int64
 
+	graphExtractionsTotal   atomic.Int64
+	entitiesExtractedTotal  atomic.Int64
+	relationsExtractedTotal atomic.Int64
+
 	mcpCallsTotal  atomic.Int64
 	mcpMu          sync.Mutex
 	mcpCallsByTool map[string]int64
@@ -153,6 +157,24 @@ func (m *Metrics) ConsolidationPerformed() { m.consolidationsTotal.Add(1) }
 // deliberately non-destructive, so n only ever describes memories excluded
 // from a summarization prompt, not memories removed from the store.
 func (m *Metrics) MemoriesDeduped(n int64) { m.memoriesDedupedTotal.Add(n) }
+
+// GraphExtractionPerformed records one GRAPH.EXTRACT RESP command or
+// extract_entities MCP tool invocation that actually ran
+// internal/graph.Extract (regardless of whether the underlying
+// CompletionProvider yielded anything -- see EntitiesExtracted/
+// RelationsExtracted below for that).
+func (m *Metrics) GraphExtractionPerformed() { m.graphExtractionsTotal.Add(1) }
+
+// EntitiesExtracted records n entities added to the knowledge graph by one
+// GRAPH.EXTRACT/extract_entities call (n may be 0 -- e.g. the mock
+// CompletionProvider's honest "nothing extracted" degradation, see
+// internal/graph/extract.go).
+func (m *Metrics) EntitiesExtracted(n int64) { m.entitiesExtractedTotal.Add(n) }
+
+// RelationsExtracted records n relations added to the knowledge graph by
+// one GRAPH.EXTRACT/extract_entities call (n may be 0, mirroring
+// EntitiesExtracted).
+func (m *Metrics) RelationsExtracted(n int64) { m.relationsExtractedTotal.Add(n) }
 
 // KeyEvicted records one key evicted by internal/storage/memstore's
 // maxmemory-style bounded-size trigger. It's a plain no-argument callback
@@ -271,6 +293,10 @@ type Snapshot struct {
 	ConsolidationsTotal  int64
 	MemoriesDedupedTotal int64
 
+	GraphExtractionsTotal   int64
+	EntitiesExtractedTotal  int64
+	RelationsExtractedTotal int64
+
 	MCPCallsTotal  int64
 	MCPCallsByTool map[string]int64
 
@@ -327,6 +353,10 @@ func (m *Metrics) Snapshot() Snapshot {
 
 		ConsolidationsTotal:  m.consolidationsTotal.Load(),
 		MemoriesDedupedTotal: m.memoriesDedupedTotal.Load(),
+
+		GraphExtractionsTotal:   m.graphExtractionsTotal.Load(),
+		EntitiesExtractedTotal:  m.entitiesExtractedTotal.Load(),
+		RelationsExtractedTotal: m.relationsExtractedTotal.Load(),
 
 		MCPCallsTotal:  m.mcpCallsTotal.Load(),
 		MCPCallsByTool: byTool,

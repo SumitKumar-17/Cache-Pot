@@ -47,6 +47,10 @@ func MetricsHandler(m *Metrics) http.Handler {
 		counter("cachepot_consolidations_total", "SUMMARY.CREATE/consolidate invocations.", snap.ConsolidationsTotal)
 		counter("cachepot_memories_deduped_total", "Source memories dropped as near-duplicates during consolidation's dedup pass (excluded from summarization input, never deleted from the store).", snap.MemoriesDedupedTotal)
 
+		counter("cachepot_graph_extractions_total", "GRAPH.EXTRACT/extract_entities invocations.", snap.GraphExtractionsTotal)
+		counter("cachepot_entities_extracted_total", "Entities added to the knowledge graph across all extractions (0 whenever the CompletionProvider's response wasn't valid JSON, e.g. the mock provider).", snap.EntitiesExtractedTotal)
+		counter("cachepot_relations_extracted_total", "Relations added to the knowledge graph across all extractions.", snap.RelationsExtractedTotal)
+
 		counter("cachepot_mcp_calls_total", "Total MCP tool invocations.", snap.MCPCallsTotal)
 		fmt.Fprintf(w, "# HELP cachepot_mcp_calls_by_tool_total Total MCP tool invocations, by tool name.\n# TYPE cachepot_mcp_calls_by_tool_total counter\n")
 		for tool, count := range snap.MCPCallsByTool {
@@ -101,12 +105,15 @@ func StatsHandler(m *Metrics, tracker *analytics.Tracker) http.Handler {
 				"prompt_cache":   statsCacheFrom(snap.PromptCache),
 				"tool_cache":     statsCacheFrom(snap.ToolCache),
 			},
-			VectorSearchesTotal:  snap.VectorSearchesTotal,
-			MemoryReadsTotal:     snap.MemoryReadsTotal,
-			MemoryWritesTotal:    snap.MemoryWritesTotal,
-			EvictionsTotal:       snap.EvictionsTotal,
-			ConsolidationsTotal:  snap.ConsolidationsTotal,
-			MemoriesDedupedTotal: snap.MemoriesDedupedTotal,
+			VectorSearchesTotal:     snap.VectorSearchesTotal,
+			MemoryReadsTotal:        snap.MemoryReadsTotal,
+			MemoryWritesTotal:       snap.MemoryWritesTotal,
+			EvictionsTotal:          snap.EvictionsTotal,
+			ConsolidationsTotal:     snap.ConsolidationsTotal,
+			MemoriesDedupedTotal:    snap.MemoriesDedupedTotal,
+			GraphExtractionsTotal:   snap.GraphExtractionsTotal,
+			EntitiesExtractedTotal:  snap.EntitiesExtractedTotal,
+			RelationsExtractedTotal: snap.RelationsExtractedTotal,
 			MCP: statsMCP{
 				CallsTotal:  snap.MCPCallsTotal,
 				CallsByTool: snap.MCPCallsByTool,
@@ -137,21 +144,24 @@ func analyticsSnapshot(tracker *analytics.Tracker) analytics.Snapshot {
 }
 
 type statsResponse struct {
-	Connections          statsConnections      `json:"connections"`
-	CommandsTotal        int64                 `json:"commands_total"`
-	ErrorsTotal          int64                 `json:"errors_total"`
-	Caches               map[string]statsCache `json:"caches"`
-	VectorSearchesTotal  int64                 `json:"vector_searches_total"`
-	MemoryReadsTotal     int64                 `json:"memory_reads_total"`
-	MemoryWritesTotal    int64                 `json:"memory_writes_total"`
-	EvictionsTotal       int64                 `json:"evictions_total"`
-	ConsolidationsTotal  int64                 `json:"consolidations_total"`
-	MemoriesDedupedTotal int64                 `json:"memories_deduped_total"`
-	MCP                  statsMCP              `json:"mcp"`
-	Embedding            statsEmbedding        `json:"embedding"`
-	Completion           statsCompletion       `json:"completion"`
-	Latency              []LatencyStats        `json:"latency_by_family"`
-	Analytics            statsAnalytics        `json:"analytics"`
+	Connections             statsConnections      `json:"connections"`
+	CommandsTotal           int64                 `json:"commands_total"`
+	ErrorsTotal             int64                 `json:"errors_total"`
+	Caches                  map[string]statsCache `json:"caches"`
+	VectorSearchesTotal     int64                 `json:"vector_searches_total"`
+	MemoryReadsTotal        int64                 `json:"memory_reads_total"`
+	MemoryWritesTotal       int64                 `json:"memory_writes_total"`
+	EvictionsTotal          int64                 `json:"evictions_total"`
+	ConsolidationsTotal     int64                 `json:"consolidations_total"`
+	MemoriesDedupedTotal    int64                 `json:"memories_deduped_total"`
+	GraphExtractionsTotal   int64                 `json:"graph_extractions_total"`
+	EntitiesExtractedTotal  int64                 `json:"entities_extracted_total"`
+	RelationsExtractedTotal int64                 `json:"relations_extracted_total"`
+	MCP                     statsMCP              `json:"mcp"`
+	Embedding               statsEmbedding        `json:"embedding"`
+	Completion              statsCompletion       `json:"completion"`
+	Latency                 []LatencyStats        `json:"latency_by_family"`
+	Analytics               statsAnalytics        `json:"analytics"`
 }
 
 // statsAnalytics is the JSON shape of Phase 5's cost/savings/token layer

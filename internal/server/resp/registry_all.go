@@ -18,4 +18,5 @@ func RegisterAll(r *Registry) {
 	RegisterMemory(r)
 	RegisterAgent(r)
 	RegisterConsolidate(r)
+	RegisterGraph(r)
 }

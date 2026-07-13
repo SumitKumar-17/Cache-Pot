@@ -21,6 +21,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/eviction"
+	"github.com/SumitKumar-17/cache-pot/internal/graph"
 	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
@@ -120,6 +121,13 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	memoryStore := memory.New(provider)
 	consolidator := consolidate.New(memoryStore, completionProvider)
 
+	// Constructed once here too, exactly like memoryStore/consolidator
+	// above: GraphStore (Phase 6's third and final piece, internal/graph)
+	// is shared between the RESP GRAPH.EXTRACT/GRAPH.RELATED commands and
+	// the MCP extract_entities/find_related tools below, so both front
+	// doors observe the exact same graph state.
+	graphStore := graph.New()
+
 	s.deps = &resp.Deps{
 		Engine:             engine,
 		Auth:               auth.New(s.cfg.Password),
@@ -135,6 +143,7 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		Analytics:          s.analytics,
 		CompletionProvider: completionProvider,
 		Consolidator:       consolidator,
+		GraphStore:         graphStore,
 	}
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())
@@ -163,7 +172,7 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		if err != nil {
 			return fmt.Errorf("server: listen on MCP port %d: %w", s.cfg.MCPPort, err)
 		}
-		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore, s.deps.Consolidator, s.metrics, s.analytics)
+		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore, s.deps.Consolidator, s.deps.GraphStore, s.deps.CompletionProvider, s.metrics, s.analytics)
 		mux := http.NewServeMux()
 		mux.Handle("/", mcpServer.Handler())
 		mux.Handle("/metrics", observability.MetricsHandler(s.metrics))

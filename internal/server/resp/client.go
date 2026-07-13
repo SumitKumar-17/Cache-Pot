@@ -8,6 +8,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
+	"github.com/SumitKumar-17/cache-pot/internal/graph"
 	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
@@ -69,6 +70,16 @@ type Deps struct {
 	// internal/server/server.go from the same shared MemoryStore and
 	// CompletionProvider instances above.
 	Consolidator *consolidate.Consolidator
+
+	// GraphStore backs GRAPH.EXTRACT/GRAPH.RELATED (see
+	// handlers_graph.go): Phase 6's third and final piece, a
+	// workspace-partitioned knowledge graph of entities/relationships
+	// extracted (via CompletionProvider above and internal/graph.Extract)
+	// from memories in MemoryStore. Constructed once in
+	// internal/server/server.go and shared with the MCP
+	// extract_entities/find_related tools, the same "construct once, pass
+	// shared instances in" discipline every other store above follows.
+	GraphStore *graph.Store
 }
 
 // ClientState is per-connection state: authentication, the selected

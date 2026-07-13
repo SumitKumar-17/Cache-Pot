@@ -9,6 +9,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
+	"github.com/SumitKumar-17/cache-pot/internal/graph"
 	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
@@ -41,6 +42,7 @@ func newTestDeps(t *testing.T) *Deps {
 		Analytics:          analytics.New(),
 		CompletionProvider: completionProvider,
 		Consolidator:       consolidate.New(memoryStore, completionProvider),
+		GraphStore:         graph.New(),
 	}
 }
 

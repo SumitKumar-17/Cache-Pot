@@ -70,6 +70,12 @@ const ErrInvalidVectorJSONMsg = "ERR invalid vector JSON"
 // JSON but not an object.
 const ErrInvalidMetadataJSONMsg = "ERR invalid metadata JSON"
 
+// ErrNoSuchMemoryMsg is returned by GRAPH.EXTRACT when memory_id doesn't
+// exist (or has expired) in the given workspace. Unlike MEMORY.GET's
+// legitimate "not found" nil-array reply, GRAPH.EXTRACT needs a real memory
+// to extract from, so a missing id is a genuine error here.
+const ErrNoSuchMemoryMsg = "ERR no such memory"
+
 // ErrUnknownCommand formats Redis's unknown-command error, including a
 // preview of the offending arguments.
 func ErrUnknownCommand(name string, args []string) string {

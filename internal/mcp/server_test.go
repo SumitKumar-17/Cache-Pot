@@ -17,6 +17,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/consolidate"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
+	"github.com/SumitKumar-17/cache-pot/internal/graph"
 	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
@@ -43,6 +44,7 @@ type testEnv struct {
 	memoryStore        *memory.Store
 	completionProvider llm.CompletionProvider
 	consolidator       *consolidate.Consolidator
+	graphStore         *graph.Store
 	metrics            *observability.Metrics
 	analytics          *analytics.Tracker
 }
@@ -57,10 +59,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	memoryStore := memory.New(embed.NewMock(8))
 	completionProvider := llm.NewMock()
 	consolidator := consolidate.New(memoryStore, completionProvider)
+	graphStore := graph.New()
 	tracker := analytics.New()
 	metrics := observability.NewMetrics()
 
-	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore, consolidator, metrics, tracker)
+	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore, consolidator, graphStore, completionProvider, metrics, tracker)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
@@ -85,6 +88,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		memoryStore:        memoryStore,
 		completionProvider: completionProvider,
 		consolidator:       consolidator,
+		graphStore:         graphStore,
 		metrics:            metrics,
 		analytics:          tracker,
 	}
@@ -128,6 +132,8 @@ func TestListTools(t *testing.T) {
 		"cache_semantic_set",
 		"consolidate",
 		"delete_vector",
+		"extract_entities",
+		"find_related",
 		"find_similar",
 		"recall",
 		"remember",
@@ -480,6 +486,88 @@ func TestConsolidateToolNothingToSummarize(t *testing.T) {
 	}
 }
 
+// TestExtractEntitiesWithMockDegradesGracefully confirms extract_entities,
+// wired to the mock CompletionProvider (the default in newTestEnv), reports
+// zero entities/relations added -- not a tool error -- exactly like
+// GRAPH.EXTRACT and internal/graph.Extract itself: the mock cannot produce
+// the JSON shape extraction asks for (see internal/graph/extract.go's doc
+// comment), so this is an honest "nothing extracted".
+func TestExtractEntitiesWithMockDegradesGracefully(t *testing.T) {
+	env := newTestEnv(t)
+
+	var rememberOut mcp.RememberOutput
+	env.call("remember", map[string]any{
+		"agent_id": "agent-1",
+		"content":  "Redis is used by Project A, which is maintained by Alice.",
+	}, &rememberOut)
+
+	var out mcp.ExtractEntitiesOutput
+	env.call("extract_entities", map[string]any{
+		"workspace": "default",
+		"memory_id": rememberOut.ID,
+	}, &out)
+
+	if out.EntitiesAdded != 0 || out.RelationsAdded != 0 {
+		t.Fatalf("extract_entities with mock provider = %+v, want zero entities/relations added", out)
+	}
+}
+
+// TestExtractEntitiesNoSuchMemoryIsToolError confirms extract_entities on a
+// memory id that doesn't exist reports a real tool error, unlike
+// (say) recall's legitimate "empty results" outcome -- extraction has
+// nothing to operate on without a real memory.
+func TestExtractEntitiesNoSuchMemoryIsToolError(t *testing.T) {
+	env := newTestEnv(t)
+
+	res, err := env.cs.CallTool(env.ctx, &sdkmcp.CallToolParams{
+		Name:      "extract_entities",
+		Arguments: map[string]any{"workspace": "default", "memory_id": "does-not-exist"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool(extract_entities): unexpected protocol error: %v", err)
+	}
+	if !res.IsError {
+		t.Fatalf("extract_entities on a nonexistent memory id: want a tool error, got %+v", res)
+	}
+}
+
+// TestFindRelatedRoundTrip populates the shared graphStore directly (since
+// the mock CompletionProvider can't produce a real extraction, see
+// TestExtractEntitiesWithMockDegradesGracefully above), then confirms
+// find_related traverses it correctly through the real MCP transport,
+// including its default-depth-1 and explicit-deeper-depth behavior.
+func TestFindRelatedRoundTrip(t *testing.T) {
+	env := newTestEnv(t)
+
+	env.graphStore.UpsertNode("default", graph.Node{ID: "redis", Label: "Redis"})
+	env.graphStore.UpsertNode("default", graph.Node{ID: "project_a", Label: "Project A"})
+	env.graphStore.UpsertNode("default", graph.Node{ID: "alice", Label: "Alice"})
+	env.graphStore.UpsertEdge("default", graph.Edge{FromID: "redis", ToID: "project_a", Label: "used_by"})
+	env.graphStore.UpsertEdge("default", graph.Edge{FromID: "project_a", ToID: "alice", Label: "maintained_by"})
+
+	var out mcp.FindRelatedOutput
+	env.call("find_related", map[string]any{"workspace": "default", "node_id": "redis"}, &out)
+	if len(out.Results) != 1 || out.Results[0].ID != "project_a" || out.Results[0].Hops != 1 {
+		t.Fatalf("find_related(redis, default depth) = %+v, want [{project_a hops=1}]", out.Results)
+	}
+
+	var deep mcp.FindRelatedOutput
+	env.call("find_related", map[string]any{"workspace": "default", "node_id": "redis", "depth": float64(2)}, &deep)
+	got := map[string]int{}
+	for _, r := range deep.Results {
+		got[r.ID] = r.Hops
+	}
+	if got["project_a"] != 1 || got["alice"] != 2 {
+		t.Fatalf("find_related(redis, depth=2) = %+v, want project_a at hop 1 and alice at hop 2", deep.Results)
+	}
+
+	var empty mcp.FindRelatedOutput
+	env.call("find_related", map[string]any{"workspace": "default", "node_id": "does-not-exist"}, &empty)
+	if len(empty.Results) != 0 {
+		t.Fatalf("find_related(unknown node) = %+v, want empty results, not an error", empty.Results)
+	}
+}
+
 // TestSharedStateWithRESP is the whole point of this package: it proves
 // there is no adapter layer or second storage between the MCP server and
 // the RESP server. It builds a real resp.Deps sharing the exact same
@@ -505,6 +593,7 @@ func TestSharedStateWithRESP(t *testing.T) {
 		MemoryStore:        env.memoryStore,
 		CompletionProvider: env.completionProvider,
 		Consolidator:       env.consolidator,
+		GraphStore:         env.graphStore,
 	}
 
 	clientConn, serverConn := net.Pipe()
@@ -618,6 +707,27 @@ func TestSharedStateWithRESP(t *testing.T) {
 	}
 	if !foundDirect || directSummary.Kind != memory.LongTerm {
 		t.Fatalf("direct memoryStore.Get after RESP SUMMARY.CREATE: got %+v, foundDirect=%v", directSummary, foundDirect)
+	}
+
+	// Knowledge graph: populate the shared graphStore instance directly
+	// (bypassing the mock CompletionProvider's inability to produce a real
+	// extraction -- see TestExtractEntitiesWithMockDegradesGracefully),
+	// then confirm GRAPH.RELATED over RESP sees exactly what MCP's
+	// find_related sees, and vice versa.
+	env.graphStore.UpsertNode("default", graph.Node{ID: "redis", Label: "Redis"})
+	env.graphStore.UpsertNode("default", graph.Node{ID: "project_a", Label: "Project A"})
+	env.graphStore.UpsertEdge("default", graph.Edge{FromID: "redis", ToID: "project_a", Label: "used_by"})
+
+	respClient.send("GRAPH.RELATED default redis")
+	relatedViaRESP := respClient.recvArrayBulkStrings()
+	if len(relatedViaRESP) != 1 || relatedViaRESP[0] != "project_a" {
+		t.Fatalf("RESP GRAPH.RELATED after direct graphStore writes: got %v, want [project_a]", relatedViaRESP)
+	}
+
+	var relatedViaMCP mcp.FindRelatedOutput
+	env.call("find_related", map[string]any{"workspace": "default", "node_id": "redis"}, &relatedViaMCP)
+	if len(relatedViaMCP.Results) != 1 || relatedViaMCP.Results[0].ID != "project_a" {
+		t.Fatalf("MCP find_related after direct graphStore writes: got %+v, want [project_a]", relatedViaMCP.Results)
 	}
 }
 
