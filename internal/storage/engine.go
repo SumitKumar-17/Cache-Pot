@@ -10,17 +10,12 @@ import "time"
 
 // defaultWorkspace-style multi-tenancy note:
 //
-// Every Engine method takes a workspace string as its first parameter, even
-// though Phase 1 only ever passes a single constant value
-// (resp.defaultWorkspace = "default"). This is a deliberate, forward-looking
-// decision: Phase 7 introduces multi-tenancy (internal/tenancy), where each
-// tenant/agent gets an isolated keyspace ("workspace"). Threading the
-// parameter through every call site now — even though it is unused for
-// routing today — means Phase 7 can implement per-workspace isolation inside
-// the storage layer (e.g. by namespacing shards or maps per workspace)
-// without changing a single call site in the RESP handlers. Retrofitting a
-// new required parameter onto ~50 methods and every call site later would be
-// far more invasive than carrying an inert string through Phase 1.
+// Every Engine method takes a workspace string as its first parameter.
+// memstore namespaces every key by (workspace, key) internally (see
+// memstore.nsKey), so this was never just an inert placeholder — Phase 7
+// built real per-workspace AUTH enforcement (internal/auth,
+// ClientState.authorizedForWorkspace) on top of this existing routing,
+// without changing a single storage call site.
 
 // SetOpts carries the optional modifiers for the SET command.
 type SetOpts struct {

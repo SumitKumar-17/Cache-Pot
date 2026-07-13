@@ -18,11 +18,12 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/vector"
 )
 
-// defaultWorkspace is the single workspace Phase 1 operates in. The
-// Engine/Entry seam already threads a workspace parameter through every
-// storage call (see internal/storage/engine.go's doc comment); Phase 1
-// simply always passes this constant, so Phase 7 multi-tenancy can
-// introduce real per-workspace routing without changing call sites here.
+// defaultWorkspace is the workspace used when a connection isn't
+// authenticated into a specific one (single-password/no-auth mode, or before
+// AUTH in multi-workspace mode). The Engine/Entry seam threads a workspace
+// parameter through every storage call (see internal/storage/engine.go's doc
+// comment); Phase 7's real per-workspace auth (internal/auth,
+// authorizedForWorkspace) builds on that existing routing.
 const defaultWorkspace = "default"
 
 // Deps bundles the shared, connection-independent dependencies every
