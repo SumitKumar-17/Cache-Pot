@@ -15,6 +15,20 @@
 // real, so its remember()/recall() tools are exposed below alongside the
 // cache/vector tools. See each RegisterXxx function below for the tools
 // this phase does expose.
+//
+// KNOWN GAP (tracked, not fixed here): Phase 7 added real per-workspace
+// AUTH/isolation enforcement on the RESP side (see
+// internal/server/resp.ClientState.authorizedForWorkspace and
+// internal/auth.NewMultiWorkspace) for every command below that takes an
+// explicit workspace/namespace parameter. MCP has no equivalent -- there is
+// no authentication concept for MCP connections at all, so every tool below
+// that accepts a Workspace/Namespace field (remember, recall, consolidate,
+// store_vector, find_similar, delete_vector, extract_entities, find_related)
+// still lets any MCP client read/write any workspace with zero enforcement.
+// This is a pre-existing, honestly-documented limitation (see AGENTS.md's
+// "Known, honest gaps" and docs/getting-started/mcp-server.md), carried
+// forward rather than fixed in this commit -- adding MCP-level auth is a
+// separate piece of work.
 package mcp
 
 import (

@@ -90,6 +90,10 @@ func handleMemoryPut(cs *ClientState, args []string) Reply {
 		}
 	}
 
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
+	}
+
 	m := memory.Memory{
 		ID:          id,
 		AgentID:     agentID,
@@ -121,6 +125,10 @@ func handleMemoryPut(cs *ClientState, args []string) Reply {
 func handleMemoryGet(cs *ClientState, args []string) Reply {
 	workspace := args[1]
 	id := args[2]
+
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
+	}
 
 	m, found, err := cs.Deps.MemoryStore.Get(context.Background(), workspace, id)
 	if err != nil {
@@ -173,6 +181,10 @@ func handleMemoryGet(cs *ClientState, args []string) Reply {
 func handleMemorySearch(cs *ClientState, args []string) Reply {
 	workspace := args[1]
 	query := args[2]
+
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
+	}
 
 	var agentID string
 	var kind *memory.Kind

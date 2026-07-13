@@ -128,9 +128,14 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	// doors observe the exact same graph state.
 	graphStore := graph.New()
 
+	authenticator, err := buildAuthenticator(s.cfg)
+	if err != nil {
+		return err
+	}
+
 	s.deps = &resp.Deps{
 		Engine:             engine,
-		Auth:               auth.New(s.cfg.Password),
+		Auth:               authenticator,
 		Metrics:            s.metrics,
 		Logger:             s.logger,
 		PubSub:             resp.NewPubSub(),
@@ -310,6 +315,24 @@ func buildCompletionProvider(cfg Config) (llm.CompletionProvider, error) {
 	default:
 		return nil, fmt.Errorf("server: unknown completion provider %q (want \"mock\" or \"openai\")", cfg.CompletionProvider)
 	}
+}
+
+// buildAuthenticator constructs the *auth.Authenticator for cfg: multi-
+// workspace mode (auth.NewMultiWorkspace) when cfg.WorkspaceCredentials is
+// non-empty, otherwise today's single-password mode (auth.New) exactly as
+// before Phase 7. cfg.Password and cfg.WorkspaceCredentials are mutually
+// exclusive -- setting both is a startup error, matching
+// buildEmbedProvider/buildCompletionProvider/buildEvictionPolicy's
+// fail-loudly-at-startup convention, since it's ambiguous which
+// authentication mode the operator meant.
+func buildAuthenticator(cfg Config) (*auth.Authenticator, error) {
+	if len(cfg.WorkspaceCredentials) > 0 && cfg.Password != "" {
+		return nil, fmt.Errorf("server: --password and --workspace-credentials are mutually exclusive (ambiguous auth mode)")
+	}
+	if len(cfg.WorkspaceCredentials) > 0 {
+		return auth.NewMultiWorkspace(cfg.WorkspaceCredentials...), nil
+	}
+	return auth.New(cfg.Password), nil
 }
 
 // buildEvictionPolicy constructs the eviction.Policy selected by

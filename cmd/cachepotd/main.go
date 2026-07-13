@@ -11,12 +11,17 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/server"
 )
 
 func main() {
 	loadDotEnv(".env")
-	cfg := parseConfig()
+	cfg, err := parseConfig()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "cachepotd:", err)
+		os.Exit(1)
+	}
 	if err := server.Run(context.Background(), cfg); err != nil {
 		fmt.Fprintln(os.Stderr, "cachepotd:", err)
 		os.Exit(1)
@@ -58,12 +63,37 @@ func loadDotEnv(path string) {
 	}
 }
 
+// parseWorkspaceCredentials parses a comma-separated "workspace:password"
+// list (e.g. "acme:secret1,other:secret2") into []auth.Credential, matching
+// --workspace-credentials/CACHEPOT_WORKSPACE_CREDENTIALS's documented
+// format. An empty input returns a nil slice (no error) since this is an
+// opt-in feature -- most deployments won't set it at all. A malformed entry
+// (missing the ':' separator, or an empty workspace/password on either
+// side of it) is a startup error with a clear message, matching
+// buildEmbedProvider/buildCompletionProvider/buildEvictionPolicy's
+// fail-loudly convention in internal/server/server.go.
+func parseWorkspaceCredentials(s string) ([]auth.Credential, error) {
+	if s == "" {
+		return nil, nil
+	}
+	parts := strings.Split(s, ",")
+	creds := make([]auth.Credential, 0, len(parts))
+	for _, part := range parts {
+		workspace, password, ok := strings.Cut(part, ":")
+		if !ok || workspace == "" || password == "" {
+			return nil, fmt.Errorf("invalid --workspace-credentials entry %q: want \"workspace:password\"", part)
+		}
+		creds = append(creds, auth.Credential{Workspace: workspace, Password: password})
+	}
+	return creds, nil
+}
+
 // parseConfig builds a server.Config from CLI flags, falling back to
 // environment variables, falling back to hard-coded defaults. Flags always
 // win when explicitly passed, since each flag's default is itself the
 // environment-variable value (or the hard-coded default if the env var is
 // unset/unparseable).
-func parseConfig() server.Config {
+func parseConfig() (server.Config, error) {
 	envPort := server.DefaultPort
 	if v := os.Getenv("CACHEPOT_PORT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -71,6 +101,7 @@ func parseConfig() server.Config {
 		}
 	}
 	envPassword := os.Getenv("CACHEPOT_PASSWORD")
+	envWorkspaceCredentials := os.Getenv("CACHEPOT_WORKSPACE_CREDENTIALS")
 	envMaxConns := server.DefaultMaxConnections
 	if v := os.Getenv("CACHEPOT_MAX_CONNECTIONS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -118,6 +149,7 @@ func parseConfig() server.Config {
 	// precedence without ever making the secret visible in --help.
 	port := flag.Int("port", envPort, "TCP port to listen on (env CACHEPOT_PORT)")
 	password := flag.String("password", "", "required AUTH password; empty means no auth (env CACHEPOT_PASSWORD)")
+	workspaceCredentials := flag.String("workspace-credentials", "", `comma-separated "workspace:password" pairs enabling Phase 7 multi-workspace AUTH mode (e.g. "acme:secret1,other:secret2"); mutually exclusive with --password (env CACHEPOT_WORKSPACE_CREDENTIALS)`)
 	maxConns := flag.Int("max-connections", envMaxConns, "maximum concurrent client connections (env CACHEPOT_MAX_CONNECTIONS)")
 	embedProvider := flag.String("embed-provider", envEmbedProvider, `text-embedding backend for CACHE.SEMANTIC: "mock" or "openai" (env CACHEPOT_EMBED_PROVIDER)`)
 	openAIAPIKey := flag.String("openai-api-key", "", "OpenAI API key, required when --embed-provider=openai (env OPENAI_API_KEY)")
@@ -137,6 +169,14 @@ func parseConfig() server.Config {
 	if resolvedOpenAIAPIKey == "" {
 		resolvedOpenAIAPIKey = envOpenAIAPIKey
 	}
+	resolvedWorkspaceCredentials := *workspaceCredentials
+	if resolvedWorkspaceCredentials == "" {
+		resolvedWorkspaceCredentials = envWorkspaceCredentials
+	}
+	workspaceCreds, err := parseWorkspaceCredentials(resolvedWorkspaceCredentials)
+	if err != nil {
+		return server.Config{}, err
+	}
 
 	return server.Config{
 		Port:                  *port,
@@ -150,5 +190,6 @@ func parseConfig() server.Config {
 		MCPPort:               *mcpPort,
 		MaxEntries:            *maxEntries,
 		EvictionPolicy:        *evictionPolicy,
-	}
+		WorkspaceCredentials:  workspaceCreds,
+	}, nil
 }

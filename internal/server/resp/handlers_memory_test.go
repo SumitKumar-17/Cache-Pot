@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/SumitKumar-17/cache-pot/internal/auth"
 )
 
 func TestMemoryPutGetRoundTrip(t *testing.T) {
@@ -250,5 +252,70 @@ func TestMemoryPutUnknownOptionSyntaxError(t *testing.T) {
 	out := execCommand(t, cs, "MEMORY.PUT", "agent-1", "content", "FROB", "x")
 	if !strings.HasPrefix(string(out), "-ERR syntax error") {
 		t.Fatalf("MEMORY.PUT unknown option reply = %q, want a syntax error", out)
+	}
+}
+
+// TestMemoryCommandsUnrestrictedInSinglePasswordMode is the regression test
+// proving Phase 7's multi-workspace enforcement did NOT change today's
+// default (single-password/no-auth) behavior: MEMORY.PUT/GET/SEARCH against
+// a workspace other than "default" still work completely unrestricted.
+func TestMemoryCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "MEMORY.PUT", "agent-1", "cross-workspace note", "ID", "m1", "WORKSPACE", "some-other-workspace")
+	if want := "$2\r\nm1\r\n"; string(out) != want {
+		t.Fatalf("MEMORY.PUT (other workspace, single-password mode) = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "MEMORY.GET", "some-other-workspace", "m1")
+	if !strings.Contains(string(out), "cross-workspace note") {
+		t.Fatalf("MEMORY.GET (other workspace, single-password mode) = %q, want it to succeed unrestricted", out)
+	}
+
+	out = execCommand(t, cs, "MEMORY.SEARCH", "some-other-workspace", "cross-workspace note")
+	if !strings.HasPrefix(string(out), "*1\r\n") {
+		t.Fatalf("MEMORY.SEARCH (other workspace, single-password mode) = %q, want a 1-result array", out)
+	}
+}
+
+// TestMemoryCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// test: a connection authenticated for workspace "acme" gets a real
+// NOPERM-style rejection when it tries to use workspace "other", and
+// succeeds when it uses its own workspace "acme".
+func TestMemoryCommandsMultiWorkspaceIsolation(t *testing.T) {
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+		auth.Credential{Workspace: "other", Password: "pass2"},
+	)
+	execCommand(t, cs, "AUTH", "pass1")
+
+	out := execCommand(t, cs, "MEMORY.PUT", "agent-1", "note", "ID", "m1", "WORKSPACE", "other")
+	want := "-" + ErrWorkspaceNotAuthorized("other") + "\r\n"
+	if string(out) != want {
+		t.Fatalf("MEMORY.PUT other workspace (authed as acme) = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "MEMORY.GET", "other", "m1")
+	if string(out) != want {
+		t.Fatalf("MEMORY.GET other workspace (authed as acme) = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "MEMORY.SEARCH", "other", "note")
+	if string(out) != want {
+		t.Fatalf("MEMORY.SEARCH other workspace (authed as acme) = %q, want %q", out, want)
+	}
+
+	// Its own workspace works fine.
+	out = execCommand(t, cs, "MEMORY.PUT", "agent-1", "note", "ID", "m1", "WORKSPACE", "acme")
+	if want := "$2\r\nm1\r\n"; string(out) != want {
+		t.Fatalf("MEMORY.PUT own workspace (acme) = %q, want %q", out, want)
+	}
+	out = execCommand(t, cs, "MEMORY.GET", "acme", "m1")
+	if !strings.Contains(string(out), "note") {
+		t.Fatalf("MEMORY.GET own workspace (acme) = %q, want it to succeed", out)
+	}
+	out = execCommand(t, cs, "MEMORY.SEARCH", "acme", "note")
+	if !strings.HasPrefix(string(out), "*1\r\n") {
+		t.Fatalf("MEMORY.SEARCH own workspace (acme) = %q, want a 1-result array", out)
 	}
 }

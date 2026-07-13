@@ -3,6 +3,8 @@ package resp
 import (
 	"strings"
 	"testing"
+
+	"github.com/SumitKumar-17/cache-pot/internal/auth"
 )
 
 func TestVectorUpsertSearchDeleteRoundTrip(t *testing.T) {
@@ -201,5 +203,70 @@ func TestVectorSearchUnknownOptionSyntaxError(t *testing.T) {
 	out := execCommand(t, cs, "VECTOR.SEARCH", "docs", "[1,0]", "FROB", "x")
 	if !strings.HasPrefix(string(out), "-ERR syntax error") {
 		t.Fatalf("VECTOR.SEARCH unknown option reply = %q, want a syntax error", out)
+	}
+}
+
+// TestVectorCommandsUnrestrictedInSinglePasswordMode is the regression test
+// proving Phase 7's multi-workspace enforcement did NOT change today's
+// default (single-password/no-auth) behavior: VECTOR.UPSERT/SEARCH/DELETE
+// against a namespace other than "default" still work completely
+// unrestricted.
+func TestVectorCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "VECTOR.UPSERT", "some-other-namespace", "a", "[1,0]")
+	if want := "+OK\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.UPSERT (other namespace, single-password mode) = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "VECTOR.SEARCH", "some-other-namespace", "[1,0]")
+	if want := "*1\r\n$1\r\na\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.SEARCH (other namespace, single-password mode) = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "VECTOR.DELETE", "some-other-namespace", "a")
+	if want := ":1\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.DELETE (other namespace, single-password mode) = %q, want %q", out, want)
+	}
+}
+
+// TestVectorCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// test: a connection authenticated for workspace "acme" gets a real
+// NOPERM-style rejection when it tries to use namespace "other", and
+// succeeds when it uses its own workspace "acme" as the namespace.
+func TestVectorCommandsMultiWorkspaceIsolation(t *testing.T) {
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+		auth.Credential{Workspace: "other", Password: "pass2"},
+	)
+	execCommand(t, cs, "AUTH", "pass1")
+
+	want := "-" + ErrWorkspaceNotAuthorized("other") + "\r\n"
+
+	out := execCommand(t, cs, "VECTOR.UPSERT", "other", "a", "[1,0]")
+	if string(out) != want {
+		t.Fatalf("VECTOR.UPSERT other namespace (authed as acme) = %q, want %q", out, want)
+	}
+	out = execCommand(t, cs, "VECTOR.SEARCH", "other", "[1,0]")
+	if string(out) != want {
+		t.Fatalf("VECTOR.SEARCH other namespace (authed as acme) = %q, want %q", out, want)
+	}
+	out = execCommand(t, cs, "VECTOR.DELETE", "other", "a")
+	if string(out) != want {
+		t.Fatalf("VECTOR.DELETE other namespace (authed as acme) = %q, want %q", out, want)
+	}
+
+	// Its own workspace, as the namespace, works fine.
+	out = execCommand(t, cs, "VECTOR.UPSERT", "acme", "a", "[1,0]")
+	if want := "+OK\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.UPSERT own workspace (acme) = %q, want %q", out, want)
+	}
+	out = execCommand(t, cs, "VECTOR.SEARCH", "acme", "[1,0]")
+	if want := "*1\r\n$1\r\na\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.SEARCH own workspace (acme) = %q, want %q", out, want)
+	}
+	out = execCommand(t, cs, "VECTOR.DELETE", "acme", "a")
+	if want := ":1\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.DELETE own workspace (acme) = %q, want %q", out, want)
 	}
 }

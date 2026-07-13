@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/graph"
 )
 
@@ -189,6 +190,65 @@ func TestGraphRelatedWrongArity(t *testing.T) {
 	want := "-" + ErrWrongNumberOfArgs("graph.related") + "\r\n"
 	if string(out) != want {
 		t.Fatalf("GRAPH.RELATED wrong arity reply = %q, want %q", out, want)
+	}
+}
+
+// TestGraphCommandsUnrestrictedInSinglePasswordMode is the regression test
+// proving Phase 7's multi-workspace enforcement did NOT change today's
+// default (single-password/no-auth) behavior: GRAPH.EXTRACT/GRAPH.RELATED
+// against a workspace other than "default" still work completely
+// unrestricted.
+func TestGraphCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
+	cs := newTestClientState(t)
+
+	memID := string(execCommand(t, cs, "MEMORY.PUT", "agent-1", "note", "WORKSPACE", "some-other-workspace"))
+	id := bulkPayload(t, memID)
+
+	out := execCommand(t, cs, "GRAPH.EXTRACT", "some-other-workspace", id)
+	if want := "*2\r\n:0\r\n:0\r\n"; string(out) != want {
+		t.Fatalf("GRAPH.EXTRACT (other workspace, single-password mode) = %q, want %q", out, want)
+	}
+
+	cs.Deps.GraphStore.UpsertNode("some-other-workspace", graph.Node{ID: "a"})
+	out = execCommand(t, cs, "GRAPH.RELATED", "some-other-workspace", "a")
+	if want := "*0\r\n"; string(out) != want {
+		t.Fatalf("GRAPH.RELATED (other workspace, single-password mode) = %q, want %q", out, want)
+	}
+}
+
+// TestGraphCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// test: a connection authenticated for workspace "acme" gets a real
+// NOPERM-style rejection when it tries to use workspace "other", and
+// succeeds when it uses its own workspace "acme".
+func TestGraphCommandsMultiWorkspaceIsolation(t *testing.T) {
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+		auth.Credential{Workspace: "other", Password: "pass2"},
+	)
+	execCommand(t, cs, "AUTH", "pass1")
+
+	memID := string(execCommand(t, cs, "MEMORY.PUT", "agent-1", "note", "WORKSPACE", "acme"))
+	id := bulkPayload(t, memID)
+
+	want := "-" + ErrWorkspaceNotAuthorized("other") + "\r\n"
+	out := execCommand(t, cs, "GRAPH.EXTRACT", "other", id)
+	if string(out) != want {
+		t.Fatalf("GRAPH.EXTRACT other workspace (authed as acme) = %q, want %q", out, want)
+	}
+	out = execCommand(t, cs, "GRAPH.RELATED", "other", "a")
+	if string(out) != want {
+		t.Fatalf("GRAPH.RELATED other workspace (authed as acme) = %q, want %q", out, want)
+	}
+
+	// Its own workspace works fine.
+	out = execCommand(t, cs, "GRAPH.EXTRACT", "acme", id)
+	if wantOK := "*2\r\n:0\r\n:0\r\n"; string(out) != wantOK {
+		t.Fatalf("GRAPH.EXTRACT own workspace (acme) = %q, want %q", out, wantOK)
+	}
+	cs.Deps.GraphStore.UpsertNode("acme", graph.Node{ID: "a"})
+	out = execCommand(t, cs, "GRAPH.RELATED", "acme", "a")
+	if wantOK := "*0\r\n"; string(out) != wantOK {
+		t.Fatalf("GRAPH.RELATED own workspace (acme) = %q, want %q", out, wantOK)
 	}
 }
 

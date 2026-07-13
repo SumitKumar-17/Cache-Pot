@@ -76,6 +76,16 @@ const ErrInvalidMetadataJSONMsg = "ERR invalid metadata JSON"
 // to extract from, so a missing id is a genuine error here.
 const ErrNoSuchMemoryMsg = "ERR no such memory"
 
+// ErrWorkspaceNotAuthorized formats the error returned when a
+// multi-workspace-authenticated connection (see internal/auth's
+// NewMultiWorkspace and ClientState.authorizedForWorkspace) tries to
+// operate against a workspace/namespace other than the one its AUTH
+// password granted it. NOPERM matches Redis's own prefix for
+// permission-denied errors (e.g. ACL-restricted commands).
+func ErrWorkspaceNotAuthorized(workspace string) string {
+	return fmt.Sprintf("NOPERM this connection is not authorized for workspace %q", workspace)
+}
+
 // ErrUnknownCommand formats Redis's unknown-command error, including a
 // preview of the offending arguments.
 func ErrUnknownCommand(name string, args []string) string {

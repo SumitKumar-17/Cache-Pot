@@ -46,6 +46,10 @@ func handleGraphExtract(cs *ClientState, args []string) Reply {
 	workspace := args[1]
 	memoryID := args[2]
 
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
+	}
+
 	mem, found, err := cs.Deps.MemoryStore.Get(context.Background(), workspace, memoryID)
 	if err != nil {
 		return Err("ERR " + err.Error())
@@ -85,6 +89,10 @@ func handleGraphRelated(cs *ClientState, args []string) Reply {
 	workspace := args[1]
 	nodeID := args[2]
 	depth := defaultGraphDepth
+
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
+	}
 
 	for i := 3; i < len(args); i += 2 {
 		if i+1 >= len(args) {

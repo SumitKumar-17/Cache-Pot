@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/SumitKumar-17/cache-pot/internal/auth"
 )
 
 func TestAgentRememberThenMemoryGetRoundTrip(t *testing.T) {
@@ -249,5 +251,57 @@ func TestAgentRememberUnknownOptionSyntaxError(t *testing.T) {
 	out := execCommand(t, cs, "AGENT.REMEMBER", "agent-1", "content", "FROB", "x")
 	if !strings.HasPrefix(string(out), "-ERR syntax error") {
 		t.Fatalf("AGENT.REMEMBER unknown option reply = %q, want a syntax error", out)
+	}
+}
+
+// TestAgentCommandsUnrestrictedInSinglePasswordMode is the regression test
+// proving Phase 7's multi-workspace enforcement did NOT change today's
+// default (single-password/no-auth) behavior: AGENT.REMEMBER/AGENT.RECALL
+// against a WORKSPACE other than "default" still work completely
+// unrestricted.
+func TestAgentCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "AGENT.REMEMBER", "agent-1", "cross-workspace note", "WORKSPACE", "some-other-workspace")
+	if !strings.HasPrefix(string(out), "$") {
+		t.Fatalf("AGENT.REMEMBER (other workspace, single-password mode) = %q, want a bulk string id", out)
+	}
+
+	out = execCommand(t, cs, "AGENT.RECALL", "agent-1", "cross-workspace note", "WORKSPACE", "some-other-workspace")
+	if !strings.HasPrefix(string(out), "*1\r\n") {
+		t.Fatalf("AGENT.RECALL (other workspace, single-password mode) = %q, want a 1-result array", out)
+	}
+}
+
+// TestAgentCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// test: a connection authenticated for workspace "acme" gets a real
+// NOPERM-style rejection when it tries to use WORKSPACE "other", and
+// succeeds when it uses its own workspace "acme".
+func TestAgentCommandsMultiWorkspaceIsolation(t *testing.T) {
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+		auth.Credential{Workspace: "other", Password: "pass2"},
+	)
+	execCommand(t, cs, "AUTH", "pass1")
+
+	out := execCommand(t, cs, "AGENT.REMEMBER", "agent-1", "note", "WORKSPACE", "other")
+	want := "-" + ErrWorkspaceNotAuthorized("other") + "\r\n"
+	if string(out) != want {
+		t.Fatalf("AGENT.REMEMBER other workspace (authed as acme) = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "AGENT.RECALL", "agent-1", "note", "WORKSPACE", "other")
+	if string(out) != want {
+		t.Fatalf("AGENT.RECALL other workspace (authed as acme) = %q, want %q", out, want)
+	}
+
+	// Its own workspace works fine.
+	out = execCommand(t, cs, "AGENT.REMEMBER", "agent-1", "note", "WORKSPACE", "acme")
+	if !strings.HasPrefix(string(out), "$") {
+		t.Fatalf("AGENT.REMEMBER own workspace (acme) = %q, want a bulk string id", out)
+	}
+	out = execCommand(t, cs, "AGENT.RECALL", "agent-1", "note", "WORKSPACE", "acme")
+	if !strings.HasPrefix(string(out), "*1\r\n") {
+		t.Fatalf("AGENT.RECALL own workspace (acme) = %q, want a 1-result array", out)
 	}
 }

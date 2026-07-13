@@ -115,6 +115,23 @@ type ClientState struct {
 	subCh          chan Message
 }
 
+// authorizedForWorkspace reports whether cs is permitted to operate against
+// the given workspace. In single-password mode (the default -- Phase 1-6
+// behavior, unchanged), every workspace is permitted: there has never been
+// enforcement here, and this phase doesn't retroactively add it for
+// existing single-password deployments. In multi-workspace mode, only the
+// connection's own authenticated cs.Workspace is permitted -- this is the
+// actual isolation boundary Phase 7 introduces, checked by every command
+// that takes an explicit workspace/namespace argument (see
+// handlers_memory.go, handlers_agent.go, handlers_vector.go,
+// handlers_graph.go).
+func (cs *ClientState) authorizedForWorkspace(workspace string) bool {
+	if !cs.Deps.Auth.MultiWorkspace() {
+		return true
+	}
+	return workspace == cs.Workspace
+}
+
 // NewClientState builds the initial state for a freshly accepted connection.
 func NewClientState(deps *Deps, conn net.Conn, w *Writer) *ClientState {
 	return &ClientState{

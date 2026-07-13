@@ -25,6 +25,23 @@ func newTestClientStateWithAuth(t *testing.T, password string) *ClientState {
 	}
 }
 
+// newTestClientStateWithMultiWorkspaceAuth is newTestClientStateWithAuth's
+// counterpart for tests exercising Phase 7's multi-workspace AUTH mode: it
+// builds a *Deps with an auth.NewMultiWorkspace Authenticator configured
+// from creds, and a ClientState that starts unauthenticated (matching
+// NewClientState's real zero-value behavior -- multi-workspace mode always
+// requires AUTH, see auth.Authenticator.Required).
+func newTestClientStateWithMultiWorkspaceAuth(t *testing.T, creds ...auth.Credential) *ClientState {
+	t.Helper()
+	deps := newTestDeps(t)
+	deps.Auth = auth.NewMultiWorkspace(creds...)
+	return &ClientState{
+		Deps:      deps,
+		Writer:    NewWriter(&bytes.Buffer{}),
+		Workspace: defaultWorkspace,
+	}
+}
+
 func TestPing(t *testing.T) {
 	cs := newTestClientState(t)
 
@@ -214,6 +231,61 @@ func TestUnauthenticatedClientRejectedExceptAllowedCommands(t *testing.T) {
 	out = execCommand(t, cs, "GET", "k")
 	if want := "$-1\r\n"; string(out) != want {
 		t.Fatalf("GET after AUTH = %q, want %q", out, want)
+	}
+}
+
+func TestAuthMultiWorkspaceCorrectPasswordSetsWorkspace(t *testing.T) {
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+		auth.Credential{Workspace: "other", Password: "pass2"},
+	)
+
+	out := execCommand(t, cs, "AUTH", "pass1")
+	if want := "+OK\r\n"; string(out) != want {
+		t.Fatalf("AUTH pass1 = %q, want %q", out, want)
+	}
+	if !cs.Authenticated {
+		t.Fatal("cs.Authenticated after a successful multi-workspace AUTH = false, want true")
+	}
+	if cs.Workspace != "acme" {
+		t.Fatalf("cs.Workspace after AUTH pass1 = %q, want %q", cs.Workspace, "acme")
+	}
+}
+
+func TestAuthMultiWorkspaceWrongPasswordErrors(t *testing.T) {
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+	)
+
+	out := execCommand(t, cs, "AUTH", "wrong")
+	want := "-" + ErrInvalidPasswordMsg + "\r\n"
+	if string(out) != want {
+		t.Fatalf("AUTH wrong (multi-workspace mode) = %q, want %q", out, want)
+	}
+	if cs.Authenticated {
+		t.Fatal("cs.Authenticated after a failed multi-workspace AUTH = true, want false")
+	}
+	if cs.Workspace != defaultWorkspace {
+		t.Fatalf("cs.Workspace after a failed AUTH = %q, want unchanged %q", cs.Workspace, defaultWorkspace)
+	}
+}
+
+func TestAuthMultiWorkspaceSecondAuthSwitchesWorkspace(t *testing.T) {
+	// A connection can re-AUTH with a different workspace's password,
+	// switching cs.Workspace accordingly -- the same "last AUTH wins" way
+	// single-password mode already allows re-AUTHing.
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+		auth.Credential{Workspace: "other", Password: "pass2"},
+	)
+
+	execCommand(t, cs, "AUTH", "pass1")
+	if cs.Workspace != "acme" {
+		t.Fatalf("cs.Workspace after AUTH pass1 = %q, want %q", cs.Workspace, "acme")
+	}
+	execCommand(t, cs, "AUTH", "pass2")
+	if cs.Workspace != "other" {
+		t.Fatalf("cs.Workspace after AUTH pass2 = %q, want %q", cs.Workspace, "other")
 	}
 }
 

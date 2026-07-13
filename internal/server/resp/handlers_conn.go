@@ -65,10 +65,19 @@ func handleHello(cs *ClientState, args []string) Reply {
 				return Err(ErrSyntaxMsg)
 			}
 			password := args[i+2] // args[i+1] is username; no ACL in Phase 1
-			if !cs.Deps.Auth.Check(password) {
-				return Err(ErrInvalidPasswordMsg)
+			if cs.Deps.Auth.MultiWorkspace() {
+				workspace, ok := cs.Deps.Auth.WorkspaceForPassword(password)
+				if !ok {
+					return Err(ErrInvalidPasswordMsg)
+				}
+				cs.Authenticated = true
+				cs.Workspace = workspace
+			} else {
+				if !cs.Deps.Auth.Check(password) {
+					return Err(ErrInvalidPasswordMsg)
+				}
+				cs.Authenticated = true
 			}
-			cs.Authenticated = true
 			i += 3
 		case "SETNAME":
 			if i+1 >= len(args) {
@@ -109,6 +118,15 @@ func handleAuth(cs *ClientState, args []string) Reply {
 	}
 	if !cs.Deps.Auth.Required() {
 		return Err("ERR Client sent AUTH, but no password is set. Did you mean AUTH <username> <password>?")
+	}
+	if cs.Deps.Auth.MultiWorkspace() {
+		workspace, ok := cs.Deps.Auth.WorkspaceForPassword(password)
+		if !ok {
+			return Err(ErrInvalidPasswordMsg)
+		}
+		cs.Authenticated = true
+		cs.Workspace = workspace
+		return OK
 	}
 	if !cs.Deps.Auth.Check(password) {
 		return Err(ErrInvalidPasswordMsg)

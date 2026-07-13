@@ -74,6 +74,10 @@ func handleAgentRemember(cs *ClientState, args []string) Reply {
 		}
 	}
 
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
+	}
+
 	m := memory.Memory{
 		AgentID:     agentID,
 		WorkspaceID: workspace,
@@ -154,6 +158,10 @@ func handleAgentRecall(cs *ClientState, args []string) Reply {
 		default:
 			return Err(ErrSyntaxMsg)
 		}
+	}
+
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
 	}
 
 	results, err := cs.Deps.MemoryStore.Search(context.Background(), workspace, query, memory.SearchOptions{

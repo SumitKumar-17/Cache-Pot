@@ -92,6 +92,11 @@ func handleVectorUpsert(cs *ClientState, args []string) Reply {
 	// args: VECTOR.UPSERT <namespace> <id> <vector_json> [opts...]
 	namespace := args[1]
 	id := args[2]
+
+	if !cs.authorizedForWorkspace(namespace) {
+		return Err(ErrWorkspaceNotAuthorized(namespace))
+	}
+
 	vec, err := parseVectorJSON(args[3])
 	if err != nil {
 		return Err(ErrInvalidVectorJSONMsg)
@@ -138,6 +143,11 @@ func handleVectorUpsert(cs *ClientState, args []string) Reply {
 func handleVectorSearch(cs *ClientState, args []string) Reply {
 	// args: VECTOR.SEARCH <namespace> <vector_json> [opts...]
 	namespace := args[1]
+
+	if !cs.authorizedForWorkspace(namespace) {
+		return Err(ErrWorkspaceNotAuthorized(namespace))
+	}
+
 	vec, err := parseVectorJSON(args[2])
 	if err != nil {
 		return Err(ErrInvalidVectorJSONMsg)
@@ -227,6 +237,11 @@ func handleVectorSearch(cs *ClientState, args []string) Reply {
 func handleVectorDelete(cs *ClientState, args []string) Reply {
 	namespace := args[1]
 	id := args[2]
+
+	if !cs.authorizedForWorkspace(namespace) {
+		return Err(ErrWorkspaceNotAuthorized(namespace))
+	}
+
 	if cs.Deps.VectorStore.Delete(namespace, id) {
 		return Int(1)
 	}

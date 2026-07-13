@@ -1,5 +1,7 @@
 package server
 
+import "github.com/SumitKumar-17/cache-pot/internal/auth"
+
 // Config holds the Phase 1 server configuration. cmd/cachepotd builds one of
 // these from CLI flags with environment-variable fallback and passes it to
 // Run.
@@ -9,7 +11,21 @@ type Config struct {
 	// Password, if non-empty, must be supplied via AUTH before other
 	// commands are allowed (matches Redis's classic requirepass). Empty
 	// means no authentication is required, matching Redis's default.
+	//
+	// Password and WorkspaceCredentials are mutually exclusive: setting
+	// both is a startup error (see buildAuthenticator in server.go),
+	// since it's ambiguous which authentication mode the operator meant.
 	Password string
+
+	// WorkspaceCredentials configures Phase 7's multi-workspace AUTH mode:
+	// when non-empty, each entry is one workspace's own AUTH password, and
+	// a connection must AUTH with one of these passwords before running
+	// any command -- the matched password determines which single
+	// workspace that connection is authorized to operate against (see
+	// internal/auth.NewMultiWorkspace and
+	// resp.ClientState.authorizedForWorkspace). Empty (the default) keeps
+	// today's single-shared-password behavior via Password above.
+	WorkspaceCredentials []auth.Credential
 	// MaxConnections bounds the number of concurrent client connections;
 	// connections beyond this are rejected with a clean error reply and
 	// the socket is closed, rather than being allowed to degrade service.
