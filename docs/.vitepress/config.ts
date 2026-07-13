@@ -27,6 +27,7 @@ export default defineConfig({
           { text: "Quickstart", link: "/getting-started/quickstart" },
           { text: "Configuration", link: "/getting-started/configuration" },
           { text: "MCP Server", link: "/getting-started/mcp-server" },
+          { text: "Observability", link: "/getting-started/observability" },
         ],
       },
       {

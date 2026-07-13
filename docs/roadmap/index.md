@@ -69,15 +69,25 @@ See the [vector commands](/commands/vector) and
 
 See the [agent memory commands](/commands/memory) page.
 
-## Phase 5 — Observability, Cost Analytics, Smarter Eviction *(planned)*
+## Phase 5 — Observability, Cost Analytics, Smarter Eviction ✅
 
-- Structured event pipeline: hits/misses/semantic hits/memory reads/MCP
-  calls/vector searches/latency/embedding queue depth
-- Cost analytics: tokens, latency, cost, cache-hit-or-not, embedding cost,
-  model used — a dashboard of money saved, hit rate, and most expensive
-  prompts
-- Eviction beyond LRU: pluggable policies scoring by frequency, recreation
-  cost, token cost, importance, and user-defined priority
+- Structured metrics: per-cache-type hits/misses, vector-search and
+  agent-memory read/write counts, MCP calls (overall and by tool), embedding
+  call instrumentation (total/errors/in-flight "queue depth" gauge), and
+  per-command-family latency — exposed via `/metrics` (Prometheus text) and
+  `/stats` (JSON) on the MCP port
+- Cost analytics: real embedding token/cost tracking from OpenAI's actual
+  usage response field, plus an opt-in, caller-reported `COST` option on
+  `CACHE.SEMANTIC`/`CACHE.PROMPT` `SET` driving a "money saved" total — a
+  `/dashboard` HTML page shows money saved, tokens/cost by model, hit rates,
+  latency, and the most expensive cached prompts
+- Eviction beyond LRU: a real `--max-entries`-bounded trigger on the core KV
+  engine, with a `Weighted` policy combining recency, access frequency, and
+  an optional cost/importance hint — approximate below the shard count, see
+  [Observability](/getting-started/observability#eviction) for the honest
+  caveat and verified numbers
+
+See the [Observability](/getting-started/observability) page.
 
 ## Phase 6 — Consolidation & Knowledge Graph *(planned — largest phase)*
 

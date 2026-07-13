@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks through connecting to a running Cache-Pot server and exercising
-the Phase 1-4 commands that are real today. See
+the Phase 1-5 commands that are real today. See
 [Installation](/getting-started/installation) if you don't have a server
 running yet.
 
@@ -79,7 +79,7 @@ Any other RESP2 client (redis-py, ioredis, jedis, node-redis, etc.) works the
 same way — point it at Cache-Pot's host/port instead of Redis's.
 
 See the [command reference](/commands/) for the full list of what's
-implemented in Phase 1-4.
+implemented in Phase 1-5.
 
 ## Semantic and prompt caching (Phase 2)
 
@@ -88,9 +88,10 @@ These run against the default `mock` embedding provider out of the box — see
 real embeddings.
 
 ```bash
-redis-cli -p 6380 CACHE.SEMANTIC SET "What is Kubernetes?" "K8s is a container orchestrator." MODEL gpt-4
+redis-cli -p 6380 CACHE.SEMANTIC SET "What is Kubernetes?" "K8s is a container orchestrator." MODEL gpt-4 COST 0.015
 redis-cli -p 6380 CACHE.SEMANTIC GET "what is k8s?" MODEL gpt-4
-# "K8s is a container orchestrator."   (matched by meaning, not exact string)
+# "K8s is a container orchestrator."   (matched by meaning, not exact string; the hit
+#                                        also records $0.015 as money saved -- see below)
 
 redis-cli -p 6380 TOOL.CACHE SET github.getIssue '{"repo":"cache-pot","issue":42}' '{"title":"..."}' TTL 300
 redis-cli -p 6380 TOOL.CACHE GET github.getIssue '{"issue":42,"repo":"cache-pot"}'
@@ -138,6 +139,19 @@ redis-cli -p 6380 MEMORY.SEARCH default "how does this user like answers formatt
 
 See the [agent memory commands](/commands/memory) page for the full command syntax,
 including `MEMORY.PUT`/`GET` for direct control over memory ids, kinds, and metadata.
+
+## Observability, cost analytics, and eviction (Phase 5)
+
+```bash
+curl http://localhost:6381/metrics    # Prometheus text
+curl http://localhost:6381/stats      # same data as JSON, plus cost analytics
+open  http://localhost:6381/dashboard # money saved, hit rates, latency, top expensive prompts
+```
+
+The `COST 0.015` on the `CACHE.SEMANTIC SET` above is what made that hit register
+$0.015 of "money saved" — see the [Observability](/getting-started/observability) page
+for the full picture, including how to bound the keyspace with `--max-entries` and
+`--eviction-policy`.
 
 ::: info Planned — Phase 6
 Automatic nightly consolidation (deduping and summarizing accumulated memories into a
