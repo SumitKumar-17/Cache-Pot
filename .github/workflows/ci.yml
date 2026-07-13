@@ -16,9 +16,15 @@ jobs:
       - run: go build ./...
       - run: go vet ./...
       - run: go test ./... -race
+      # Pinned explicitly (not "latest"): "latest" resolves to the newest
+      # v1.x release for config-compatibility reasons, and that release's
+      # binary was built with an older Go toolchain than this module's own
+      # go.mod directive, which golangci-lint refuses to run against. Our
+      # config is v2-schema (see .golangci.yml); bump this pin deliberately
+      # when adopting a newer golangci-lint v2 release.
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.12.2
 
   docker:
     runs-on: ubuntu-latest
