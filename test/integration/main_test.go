@@ -261,7 +261,7 @@ func TestPipelining(t *testing.T) {
 	const n = 20
 	var sb strings.Builder
 	for i := 0; i < n; i++ {
-		sb.WriteString(fmt.Sprintf("SET k%d v%d\r\n", i, i))
+		fmt.Fprintf(&sb, "SET k%d v%d\r\n", i, i)
 	}
 	if _, err := conn.Write([]byte(sb.String())); err != nil {
 		t.Fatalf("write pipeline: %v", err)
