@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -457,7 +458,7 @@ func TestListExcludesExpiredMemories(t *testing.T) {
 	}
 }
 
-func TestHistoryNotImplemented(t *testing.T) {
+func TestHistorySingleVersionHasNoPriorHistory(t *testing.T) {
 	s := newTestStore()
 	ctx := context.Background()
 
@@ -471,7 +472,157 @@ func TestHistoryNotImplemented(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 
-	if _, err := s.History(ctx, "default", id); err != ErrHistoryNotImplemented {
-		t.Fatalf("History error = %v, want ErrHistoryNotImplemented", err)
+	got, err := s.History(ctx, "default", id)
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("History (single Put, never overwritten) = %d entries, want exactly 1 (the current version)", len(got))
+	}
+	if got[0].Content != "note" || got[0].Version != 1 {
+		t.Fatalf("History[0] = %+v, want Content=%q Version=1", got[0], "note")
+	}
+}
+
+func TestHistoryBuildsUpOldestFirstEndingAtCurrent(t *testing.T) {
+	s := newTestStore()
+	ctx := context.Background()
+
+	mustPut := func(content string) {
+		if _, err := s.Put(ctx, Memory{
+			ID:          "mem-1",
+			AgentID:     "agent-1",
+			WorkspaceID: "default",
+			Kind:        LongTerm,
+			Content:     content,
+		}, 0); err != nil {
+			t.Fatalf("Put(%q): %v", content, err)
+		}
+	}
+
+	mustPut("v1")
+	mustPut("v2")
+	mustPut("v3")
+
+	got, err := s.History(ctx, "default", "mem-1")
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("History = %d entries, want 3", len(got))
+	}
+
+	wantContents := []string{"v1", "v2", "v3"}
+	wantVersions := []int{1, 2, 3}
+	for i, m := range got {
+		if m.Content != wantContents[i] {
+			t.Errorf("History[%d].Content = %q, want %q", i, m.Content, wantContents[i])
+		}
+		if m.Version != wantVersions[i] {
+			t.Errorf("History[%d].Version = %d, want %d", i, m.Version, wantVersions[i])
+		}
+	}
+
+	// Guard against the aliasing/shared-pointer bug class: every entry's
+	// Content and Embedding must genuinely reflect what was true at that
+	// version, not all secretly pointing at the final value.
+	if got[0].Content == got[2].Content {
+		t.Fatalf("History[0] and History[2] have the same Content %q -- looks like every entry is aliased to the final value", got[0].Content)
+	}
+	for i := 0; i < len(got); i++ {
+		for j := i + 1; j < len(got); j++ {
+			if &got[i].Embedding[0] == &got[j].Embedding[0] {
+				t.Fatalf("History[%d] and History[%d] share the same Embedding backing array -- aliasing bug", i, j)
+			}
+		}
+	}
+
+	// The last entry must equal the current version as reported by Get.
+	current, found, err := s.Get(ctx, "default", "mem-1")
+	if err != nil || !found {
+		t.Fatalf("Get: found=%v err=%v", found, err)
+	}
+	if got[2].Content != current.Content || got[2].Version != current.Version {
+		t.Fatalf("History's last entry = %+v, want it to match the current version %+v", got[2], current)
+	}
+}
+
+func TestHistoryUnknownIDReturnsNilNil(t *testing.T) {
+	s := newTestStore()
+	ctx := context.Background()
+
+	got, err := s.History(ctx, "default", "does-not-exist")
+	if err != nil {
+		t.Fatalf("History (unknown id) error = %v, want nil", err)
+	}
+	if got != nil {
+		t.Fatalf("History (unknown id) = %v, want nil", got)
+	}
+}
+
+func TestHistoryExpiredCurrentVersionReturnsNilNil(t *testing.T) {
+	s := newTestStore()
+	ctx := context.Background()
+
+	fakeNow := time.Now()
+	s.now = func() time.Time { return fakeNow }
+
+	id, err := s.Put(ctx, Memory{
+		AgentID:     "agent-1",
+		WorkspaceID: "default",
+		Kind:        LongTerm,
+		Content:     "ephemeral",
+	}, 30*time.Second)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	s.now = func() time.Time { return fakeNow.Add(31 * time.Second) }
+
+	got, err := s.History(ctx, "default", id)
+	if err != nil {
+		t.Fatalf("History (expired current version) error = %v, want nil", err)
+	}
+	if got != nil {
+		t.Fatalf("History (expired current version) = %v, want nil", got)
+	}
+}
+
+func TestHistoryBoundedLengthDropsOldest(t *testing.T) {
+	s := newTestStore()
+	ctx := context.Background()
+
+	total := maxMemoryHistoryPerRecord + 10
+	for i := 0; i < total; i++ {
+		if _, err := s.Put(ctx, Memory{
+			ID:          "mem-1",
+			AgentID:     "agent-1",
+			WorkspaceID: "default",
+			Kind:        LongTerm,
+			Content:     "v" + strconv.Itoa(i),
+		}, 0); err != nil {
+			t.Fatalf("Put %d: %v", i, err)
+		}
+	}
+
+	got, err := s.History(ctx, "default", "mem-1")
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	// maxMemoryHistoryPerRecord prior versions + the current version.
+	wantLen := maxMemoryHistoryPerRecord + 1
+	if len(got) != wantLen {
+		t.Fatalf("History length = %d, want %d (bounded to %d prior versions + current)", len(got), wantLen, maxMemoryHistoryPerRecord)
+	}
+	// The oldest entries should have been dropped: the first entry returned
+	// should be the oldest one that survived the cap, not "v0".
+	wantFirstContent := "v" + strconv.Itoa(total-wantLen)
+	if got[0].Content != wantFirstContent {
+		t.Fatalf("History[0].Content = %q, want %q (the oldest surviving version after the cap dropped older ones)", got[0].Content, wantFirstContent)
+	}
+	// The last entry is always the current version.
+	wantLastContent := "v" + strconv.Itoa(total-1)
+	if got[len(got)-1].Content != wantLastContent {
+		t.Fatalf("History last entry Content = %q, want %q (the current version)", got[len(got)-1].Content, wantLastContent)
 	}
 }

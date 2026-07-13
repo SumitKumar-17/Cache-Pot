@@ -278,6 +278,128 @@ func TestMemoryCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
 	}
 }
 
+func TestMemoryHistoryRoundTrip(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "first content", "ID", "mem-1")
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "second content", "ID", "mem-1")
+
+	out := execCommand(t, cs, "MEMORY.HISTORY", "default", "mem-1")
+	s := string(out)
+	if !strings.HasPrefix(s, "*2\r\n") {
+		t.Fatalf("MEMORY.HISTORY reply = %q, want a 2-element outer array (2 versions)", s)
+	}
+
+	firstIdx := strings.Index(s, "first content")
+	secondIdx := strings.Index(s, "second content")
+	if firstIdx < 0 || secondIdx < 0 {
+		t.Fatalf("MEMORY.HISTORY reply missing content: %q", s)
+	}
+	if firstIdx > secondIdx {
+		t.Fatalf("MEMORY.HISTORY reply has versions out of order (want oldest first): %q", s)
+	}
+	if !strings.Contains(s, "version\r\n$1\r\n1\r\n") || !strings.Contains(s, "version\r\n$1\r\n2\r\n") {
+		t.Fatalf("MEMORY.HISTORY reply missing version=1 and version=2: %q", s)
+	}
+}
+
+func TestMemoryHistoryLimitCapsToMostRecent(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "v1", "ID", "mem-1")
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "v2", "ID", "mem-1")
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "v3", "ID", "mem-1")
+
+	out := execCommand(t, cs, "MEMORY.HISTORY", "default", "mem-1", "LIMIT", "2")
+	s := string(out)
+	if !strings.HasPrefix(s, "*2\r\n") {
+		t.Fatalf("MEMORY.HISTORY LIMIT 2 reply = %q, want a 2-element outer array", s)
+	}
+	if strings.Contains(s, "$2\r\nv1\r\n") {
+		t.Fatalf("MEMORY.HISTORY LIMIT 2 reply should have dropped the oldest version v1: %q", s)
+	}
+	v2Idx := strings.Index(s, "$2\r\nv2\r\n")
+	v3Idx := strings.Index(s, "$2\r\nv3\r\n")
+	if v2Idx < 0 || v3Idx < 0 {
+		t.Fatalf("MEMORY.HISTORY LIMIT 2 reply missing v2/v3: %q", s)
+	}
+	if v2Idx > v3Idx {
+		t.Fatalf("MEMORY.HISTORY LIMIT 2 reply has the 2 most recent versions out of order (want oldest-of-the-two first): %q", s)
+	}
+}
+
+func TestMemoryHistoryUnknownIDNilArray(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "MEMORY.HISTORY", "default", "nope")
+	want := "*-1\r\n"
+	if string(out) != want {
+		t.Fatalf("MEMORY.HISTORY (unknown id) reply = %q, want %q (nil array)", out, want)
+	}
+}
+
+func TestMemoryHistoryWrongArity(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "MEMORY.HISTORY", "default")
+	want := "-" + ErrWrongNumberOfArgs("memory.history") + "\r\n"
+	if string(out) != want {
+		t.Fatalf("MEMORY.HISTORY wrong arity reply = %q, want %q", out, want)
+	}
+}
+
+func TestMemoryHistoryNonNumericLimit(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "content", "ID", "mem-1")
+	out := execCommand(t, cs, "MEMORY.HISTORY", "default", "mem-1", "LIMIT", "notanumber")
+	want := "-" + ErrNotIntegerMsg + "\r\n"
+	if string(out) != want {
+		t.Fatalf("MEMORY.HISTORY non-numeric LIMIT reply = %q, want %q", out, want)
+	}
+}
+
+// TestMemoryHistoryUnrestrictedInSinglePasswordMode is the regression test
+// proving Phase 7's multi-workspace enforcement did NOT change today's
+// default (single-password/no-auth) behavior for MEMORY.HISTORY, mirroring
+// TestMemoryCommandsUnrestrictedInSinglePasswordMode.
+func TestMemoryHistoryUnrestrictedInSinglePasswordMode(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "MEMORY.PUT", "agent-1", "cross-workspace note", "ID", "m1", "WORKSPACE", "some-other-workspace")
+	if want := "$2\r\nm1\r\n"; string(out) != want {
+		t.Fatalf("MEMORY.PUT (other workspace, single-password mode) = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "MEMORY.HISTORY", "some-other-workspace", "m1")
+	if !strings.Contains(string(out), "cross-workspace note") {
+		t.Fatalf("MEMORY.HISTORY (other workspace, single-password mode) = %q, want it to succeed unrestricted", out)
+	}
+}
+
+// TestMemoryHistoryMultiWorkspaceIsolation mirrors
+// TestMemoryCommandsMultiWorkspaceIsolation for MEMORY.HISTORY: a connection
+// authenticated for workspace "acme" gets NOPERM against workspace "other".
+func TestMemoryHistoryMultiWorkspaceIsolation(t *testing.T) {
+	cs := newTestClientStateWithMultiWorkspaceAuth(t,
+		auth.Credential{Workspace: "acme", Password: "pass1"},
+		auth.Credential{Workspace: "other", Password: "pass2"},
+	)
+	execCommand(t, cs, "AUTH", "pass1")
+
+	out := execCommand(t, cs, "MEMORY.HISTORY", "other", "m1")
+	want := "-" + ErrWorkspaceNotAuthorized("other") + "\r\n"
+	if string(out) != want {
+		t.Fatalf("MEMORY.HISTORY other workspace (authed as acme) = %q, want %q", out, want)
+	}
+
+	execCommand(t, cs, "MEMORY.PUT", "agent-1", "note", "ID", "m1", "WORKSPACE", "acme")
+	out = execCommand(t, cs, "MEMORY.HISTORY", "acme", "m1")
+	if !strings.Contains(string(out), "note") {
+		t.Fatalf("MEMORY.HISTORY own workspace (acme) = %q, want it to succeed", out)
+	}
+}
+
 // TestMemoryCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
 // test: a connection authenticated for workspace "acme" gets a real
 // NOPERM-style rejection when it tries to use workspace "other", and

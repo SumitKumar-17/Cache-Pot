@@ -5,14 +5,13 @@
 // MEMORY.SEARCH RESP commands; see
 // internal/server/resp/handlers_memory.go.
 //
-// Versioning scope (deliberate Phase 4 simplification, mirroring how
-// internal/semantic and internal/toolcache document their own
-// simplifications): each Put to an existing (workspace, id) bumps Version
-// and replaces the stored record's content/embedding/metadata in place. No
-// version history log is kept -- Store.History always reports
-// ErrHistoryNotImplemented. Full "what did the agent know yesterday"
-// version-history retrieval is explicitly Phase 7 scope (see
-// api/commands.yaml's MEMORY.HISTORY entry, phase: 7, status: planned).
+// Versioning: each Put to an existing (workspace, id) bumps Version and
+// replaces the stored record's content/embedding/metadata in place as the
+// current/latest version. Phase 7 additionally keeps a bounded log of every
+// version a Put makes obsolete (see Store's doc comment on its history
+// field and maxMemoryHistoryPerRecord), so Store.History can answer "what
+// did the agent know at each point in time" for a given id -- see
+// internal/server/resp/handlers_memory.go's MEMORY.HISTORY command.
 package memory
 
 import "time"

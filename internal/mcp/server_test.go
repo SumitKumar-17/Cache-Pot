@@ -135,6 +135,7 @@ func TestListTools(t *testing.T) {
 		"extract_entities",
 		"find_related",
 		"find_similar",
+		"memory_history",
 		"recall",
 		"remember",
 		"store_vector",
@@ -424,6 +425,57 @@ func TestRecallDoesNotLeakOtherAgentsMemories(t *testing.T) {
 	}
 }
 
+// TestMemoryHistoryTool exercises the memory_history MCP tool end to end
+// against the shared memoryStore instance: three Puts to the same id build
+// up a real version history, oldest first, ending at the current version.
+func TestMemoryHistoryTool(t *testing.T) {
+	env := newTestEnv(t)
+
+	for _, content := range []string{"v1", "v2", "v3"} {
+		if _, err := env.memoryStore.Put(env.ctx, memory.Memory{
+			ID:          "mem-1",
+			AgentID:     "agent-1",
+			WorkspaceID: "default",
+			Kind:        memory.LongTerm,
+			Content:     content,
+		}, 0); err != nil {
+			t.Fatalf("memoryStore.Put(%q): %v", content, err)
+		}
+	}
+
+	var out mcp.MemoryHistoryOutput
+	env.call("memory_history", map[string]any{"workspace": "default", "id": "mem-1"}, &out)
+	if len(out.Versions) != 3 {
+		t.Fatalf("memory_history: got %d versions, want 3: %+v", len(out.Versions), out.Versions)
+	}
+	wantContents := []string{"v1", "v2", "v3"}
+	for i, v := range out.Versions {
+		if v.Content != wantContents[i] {
+			t.Errorf("memory_history versions[%d].Content = %q, want %q (oldest first, ending at current)", i, v.Content, wantContents[i])
+		}
+		if v.Version != i+1 {
+			t.Errorf("memory_history versions[%d].Version = %d, want %d", i, v.Version, i+1)
+		}
+	}
+
+	// LIMIT caps to the most recent N, still oldest-first among those.
+	var limited mcp.MemoryHistoryOutput
+	env.call("memory_history", map[string]any{"workspace": "default", "id": "mem-1", "limit": 2}, &limited)
+	if len(limited.Versions) != 2 {
+		t.Fatalf("memory_history (limit=2): got %d versions, want 2: %+v", len(limited.Versions), limited.Versions)
+	}
+	if limited.Versions[0].Content != "v2" || limited.Versions[1].Content != "v3" {
+		t.Fatalf("memory_history (limit=2): got %+v, want the 2 most recent versions [v2, v3]", limited.Versions)
+	}
+
+	// Unknown id: empty (not erroring) versions list.
+	var missing mcp.MemoryHistoryOutput
+	env.call("memory_history", map[string]any{"workspace": "default", "id": "does-not-exist"}, &missing)
+	if len(missing.Versions) != 0 {
+		t.Fatalf("memory_history (unknown id) = %+v, want an empty versions list, not an error", missing.Versions)
+	}
+}
+
 // TestConsolidateTool exercises the consolidate MCP tool end to end: it
 // remembers a few near-identical episodic memories plus one distinct one
 // for an agent, consolidates them, and confirms the result matches
@@ -664,6 +716,26 @@ func TestSharedStateWithRESP(t *testing.T) {
 	}
 	if !foundViaRESP {
 		t.Fatalf("RESP AGENT.RECALL after MCP remember: memory id %q not found in %v", rememberOut.ID, ids)
+	}
+
+	// Memory: version history built via real RESP MEMORY.PUT calls is
+	// visible via the MCP memory_history tool.
+	respClient.send("MEMORY.PUT history-agent history-v1 ID hist-1")
+	if got := respClient.recvBulk(); got != "hist-1" {
+		t.Fatalf("MEMORY.PUT (first) reply = %q, want hist-1", got)
+	}
+	respClient.send("MEMORY.PUT history-agent history-v2 ID hist-1")
+	if got := respClient.recvBulk(); got != "hist-1" {
+		t.Fatalf("MEMORY.PUT (second) reply = %q, want hist-1", got)
+	}
+
+	var historyOut mcp.MemoryHistoryOutput
+	env.call("memory_history", map[string]any{"workspace": "default", "id": "hist-1"}, &historyOut)
+	if len(historyOut.Versions) != 2 {
+		t.Fatalf("MCP memory_history after RESP MEMORY.PUT x2: got %d versions, want 2: %+v", len(historyOut.Versions), historyOut.Versions)
+	}
+	if historyOut.Versions[0].Content != "history-v1" || historyOut.Versions[1].Content != "history-v2" {
+		t.Fatalf("MCP memory_history after RESP MEMORY.PUT x2: got %+v, want [history-v1, history-v2] oldest first", historyOut.Versions)
 	}
 
 	// Consolidation: RESP AGENT.REMEMBER (episodic) -> MCP consolidate ->

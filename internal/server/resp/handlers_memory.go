@@ -18,16 +18,15 @@ const (
 	defaultMemorySearchK   = 10
 )
 
-// RegisterMemory adds the agent-memory commands: MEMORY.PUT, MEMORY.GET, and
-// MEMORY.SEARCH, backed by internal/memory's shared agent-memory store.
-// Embedding-similarity ranking reuses internal/vector.Store internally (see
-// internal/memory/store.go); full version-history retrieval
-// (MEMORY.HISTORY) is out of scope here -- see internal/memory's doc
-// comment on Phase 4's versioning scope.
+// RegisterMemory adds the agent-memory commands: MEMORY.PUT, MEMORY.GET,
+// MEMORY.SEARCH, and MEMORY.HISTORY, backed by internal/memory's shared
+// agent-memory store. Embedding-similarity ranking reuses
+// internal/vector.Store internally (see internal/memory/store.go).
 func RegisterMemory(r *Registry) {
 	r.Register(&Command{Name: "MEMORY.PUT", MinArgs: 3, MaxArgs: -1, Handler: handleMemoryPut})
 	r.Register(&Command{Name: "MEMORY.GET", MinArgs: 3, MaxArgs: 3, Handler: handleMemoryGet})
 	r.Register(&Command{Name: "MEMORY.SEARCH", MinArgs: 3, MaxArgs: -1, Handler: handleMemorySearch})
+	r.Register(&Command{Name: "MEMORY.HISTORY", MinArgs: 3, MaxArgs: 5, Handler: handleMemoryHistory})
 }
 
 // handleMemoryPut implements:
@@ -139,16 +138,28 @@ func handleMemoryGet(cs *ClientState, args []string) Reply {
 		return NullArray()
 	}
 
+	fields, err := memoryFieldsReply(m)
+	if err != nil {
+		return Err("ERR " + err.Error())
+	}
+	return ArraySlice(fields)
+}
+
+// memoryFieldsReply builds the flat field/value RESP array items (id,
+// agent_id, kind, content, metadata, created_at, version) describing a
+// single memory version -- the same convention as HGETALL. Shared by
+// handleMemoryGet and handleMemoryHistory so a single memory version is
+// formatted identically by both commands.
+func memoryFieldsReply(m memory.Memory) ([]Reply, error) {
 	metadata := m.Metadata
 	if metadata == nil {
 		metadata = map[string]string{}
 	}
 	metadataJSON, err := json.Marshal(metadata)
 	if err != nil {
-		return Err("ERR " + err.Error())
+		return nil, err
 	}
-
-	return Array(
+	return []Reply{
 		BulkString("id"), BulkString(m.ID),
 		BulkString("agent_id"), BulkString(m.AgentID),
 		BulkString("kind"), BulkString(m.Kind.String()),
@@ -156,7 +167,7 @@ func handleMemoryGet(cs *ClientState, args []string) Reply {
 		BulkString("metadata"), BulkString(string(metadataJSON)),
 		BulkString("created_at"), BulkString(m.CreatedAt.Format(time.RFC3339)),
 		BulkString("version"), BulkString(strconv.Itoa(m.Version)),
-	)
+	}, nil
 }
 
 // handleMemorySearch implements:
@@ -255,6 +266,67 @@ func handleMemorySearch(cs *ClientState, args []string) Reply {
 		if withScores {
 			items = append(items, BulkString(formatFloat(r.Score)))
 		}
+	}
+	return ArraySlice(items)
+}
+
+// handleMemoryHistory implements:
+//
+//	MEMORY.HISTORY <workspace> <id> [LIMIT <n>]
+//
+// Returns every stored version of (workspace, id) oldest-first, ending with
+// the current/latest version, as an array of per-version snapshots -- each
+// snapshot formatted exactly like MEMORY.GET's own flat field-array reply
+// (see memoryFieldsReply). LIMIT (optional) caps how many of the MOST
+// RECENT versions are returned when there are more than LIMIT: if limited,
+// the oldest surviving entries are still ordered oldest-first among
+// themselves, but the oldest versions overall are the ones dropped -- a
+// caller asking to limit history wants the most recent lineage, not the
+// most ancient. Returns a nil array (via NullArray), not an empty one, if
+// id doesn't exist in workspace or has expired -- the same "missing key"
+// convention MEMORY.GET uses for a specific-id lookup that finds nothing,
+// distinct from MEMORY.SEARCH's empty-array convention for a search that
+// finds nothing (see handleMemoryGet's doc comment).
+func handleMemoryHistory(cs *ClientState, args []string) Reply {
+	workspace := args[1]
+	id := args[2]
+
+	if !cs.authorizedForWorkspace(workspace) {
+		return Err(ErrWorkspaceNotAuthorized(workspace))
+	}
+
+	limit := 0 // <= 0 means "no limit beyond the store's own internal cap"
+	if len(args) > 3 {
+		if len(args) != 5 || !strings.EqualFold(args[3], "LIMIT") {
+			return Err(ErrSyntaxMsg)
+		}
+		n, err := strconv.Atoi(args[4])
+		if err != nil {
+			return Err(ErrNotIntegerMsg)
+		}
+		limit = n
+	}
+
+	versions, err := cs.Deps.MemoryStore.History(context.Background(), workspace, id)
+	if err != nil {
+		return Err("ERR " + err.Error())
+	}
+	cs.Deps.Metrics.MemoryRead()
+	if versions == nil {
+		return NullArray()
+	}
+
+	if limit > 0 && len(versions) > limit {
+		versions = versions[len(versions)-limit:]
+	}
+
+	items := make([]Reply, 0, len(versions))
+	for _, v := range versions {
+		fields, err := memoryFieldsReply(v)
+		if err != nil {
+			return Err("ERR " + err.Error())
+		}
+		items = append(items, ArraySlice(fields))
 	}
 	return ArraySlice(items)
 }

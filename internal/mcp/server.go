@@ -22,9 +22,10 @@
 // internal/auth.NewMultiWorkspace) for every command below that takes an
 // explicit workspace/namespace parameter. MCP has no equivalent -- there is
 // no authentication concept for MCP connections at all, so every tool below
-// that accepts a Workspace/Namespace field (remember, recall, consolidate,
-// store_vector, find_similar, delete_vector, extract_entities, find_related)
-// still lets any MCP client read/write any workspace with zero enforcement.
+// that accepts a Workspace/Namespace field (remember, recall, memory_history,
+// consolidate, store_vector, find_similar, delete_vector, extract_entities,
+// find_related) still lets any MCP client read/write any workspace with
+// zero enforcement.
 // This is a pre-existing, honestly-documented limitation (see AGENTS.md's
 // "Known, honest gaps" and docs/getting-started/mcp-server.md), carried
 // forward rather than fixed in this commit -- adding MCP-level auth is a
@@ -658,6 +659,73 @@ func (s *Server) recall(ctx context.Context, _ *sdkmcp.CallToolRequest, in Recal
 	return nil, RecallOutput{Results: out}, nil
 }
 
+// MemoryHistoryInput is the input for memory_history, mirroring
+// MEMORY.HISTORY <workspace> <id> [LIMIT <n>].
+type MemoryHistoryInput struct {
+	Workspace string `json:"workspace,omitempty" jsonschema:"workspace the memory belongs to; defaults to \"default\" if omitted or empty"`
+	ID        string `json:"id" jsonschema:"id of the memory whose version history to fetch"`
+	// Limit mirrors MEMORY.HISTORY's LIMIT option: omitted or <= 0 means no
+	// limit beyond the store's own internal cap; otherwise only the Limit
+	// most recent versions are kept (still ordered oldest-first among
+	// themselves -- the oldest versions overall are the ones dropped).
+	Limit int `json:"limit,omitempty" jsonschema:"cap on how many of the most recent versions to return; omitted or <=0 means no limit beyond the store's own internal cap"`
+}
+
+// MemoryVersion is one version snapshot in memory_history's output,
+// mirroring MEMORY.GET/MEMORY.HISTORY's flat field set (id, agent_id, kind,
+// content, metadata, created_at, version).
+type MemoryVersion struct {
+	ID        string            `json:"id"`
+	AgentID   string            `json:"agent_id"`
+	Kind      string            `json:"kind"`
+	Content   string            `json:"content"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+	CreatedAt string            `json:"created_at"`
+	Version   int               `json:"version"`
+}
+
+// MemoryHistoryOutput is the output for memory_history. Versions is an
+// empty (not nil-vs-non-nil-distinguished) slice if id doesn't exist in
+// workspace or has expired -- MCP's JSON output has no equivalent to RESP's
+// nil-array-vs-empty-array distinction, so this is simply "nothing to
+// report" either way, mirroring MEMORY.HISTORY's nil-array RESP reply's
+// meaning without RESP's own wire-level distinction.
+type MemoryHistoryOutput struct {
+	Versions []MemoryVersion `json:"versions"`
+}
+
+func (s *Server) memoryHistory(ctx context.Context, _ *sdkmcp.CallToolRequest, in MemoryHistoryInput) (*sdkmcp.CallToolResult, MemoryHistoryOutput, error) {
+	s.metrics.MCPCallRecorded("memory_history")
+	workspace := in.Workspace
+	if workspace == "" {
+		workspace = defaultMemoryWorkspace
+	}
+
+	versions, err := s.memoryStore.History(ctx, workspace, in.ID)
+	if err != nil {
+		return nil, MemoryHistoryOutput{}, err
+	}
+	s.metrics.MemoryRead()
+
+	if in.Limit > 0 && len(versions) > in.Limit {
+		versions = versions[len(versions)-in.Limit:]
+	}
+
+	out := make([]MemoryVersion, len(versions))
+	for i, v := range versions {
+		out[i] = MemoryVersion{
+			ID:        v.ID,
+			AgentID:   v.AgentID,
+			Kind:      v.Kind.String(),
+			Content:   v.Content,
+			Metadata:  v.Metadata,
+			CreatedAt: v.CreatedAt.Format(time.RFC3339),
+			Version:   v.Version,
+		}
+	}
+	return nil, MemoryHistoryOutput{Versions: out}, nil
+}
+
 func (s *Server) registerMemoryTools() {
 	sdkmcp.AddTool(s.sdk, &sdkmcp.Tool{
 		Name:        "remember",
@@ -668,6 +736,11 @@ func (s *Server) registerMemoryTools() {
 		Name:        "recall",
 		Description: "Recall this agent's own past memories relevant to a query, ranked by semantic similarity. Never returns another agent's memories. Backed by the same memory.Store instance as the AGENT.RECALL RESP command.",
 	}, s.recall)
+
+	sdkmcp.AddTool(s.sdk, &sdkmcp.Tool{
+		Name:        "memory_history",
+		Description: "Fetch every stored version of a memory by (workspace, id), oldest first, ending with the current/latest version. An optional limit caps the result to the most recent N versions. Returns an empty versions list, not an error, if id doesn't exist in workspace or has expired. Backed by the same memory.Store instance as the MEMORY.HISTORY RESP command.",
+	}, s.memoryHistory)
 }
 
 // ---- SUMMARY.CREATE / consolidate ----

@@ -13,10 +13,18 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/vector"
 )
 
-// ErrHistoryNotImplemented is returned by Store.History: Phase 4
-// deliberately keeps no version-history log (see this package's doc
-// comment). Full history retrieval is Phase 7 scope.
-var ErrHistoryNotImplemented = errors.New("memory: version history is not implemented until Phase 7")
+// maxMemoryHistoryPerRecord bounds how many prior versions Store keeps per
+// (workspace, id). Without a cap, an id that's Put to very frequently (e.g.
+// a running log/counter-style memory updated on every agent turn) could
+// grow its version-history log without bound. Once the cap is exceeded, the
+// oldest prior version is dropped, mirroring this codebase's established
+// pattern of bounding anything that could otherwise grow unbounded rather
+// than maintaining an always-exact, always-growing structure -- see
+// internal/analytics.Tracker's maxTopEntries and the TTL reaper's
+// sampleSize for the same tradeoff applied elsewhere. 100 is generous for
+// History's intended use ("what did this memory look like over time") while
+// keeping a single hot id's footprint bounded.
+const maxMemoryHistoryPerRecord = 100
 
 // defaultSearchK is Search's fallback result cap when SearchOptions.K is
 // omitted (<= 0), matching MEMORY.SEARCH's own documented default.
@@ -61,8 +69,7 @@ type ListOptions struct {
 
 // MemoryStore is the Phase 4 seam for shared agent memory: put/get a
 // memory, search over memories by embedding similarity (optionally scoped
-// to an agent and/or kind), and fetch a memory's version history (Phase 7 --
-// see ErrHistoryNotImplemented).
+// to an agent and/or kind), and fetch a memory's version history (Phase 7).
 type MemoryStore interface {
 	// Put stores m, embedding m.Content via the configured embed.Provider.
 	// Only m.ID (optional), m.AgentID, m.WorkspaceID, m.Kind, m.Content, and
@@ -85,8 +92,15 @@ type MemoryStore interface {
 	// returns a nil slice, not an error.
 	Search(ctx context.Context, workspaceID, query string, opts SearchOptions) ([]SearchResult, error)
 
-	// History always returns ErrHistoryNotImplemented in Phase 4 -- see
-	// this package's doc comment.
+	// History returns every version of (workspaceID, id), oldest first,
+	// ending with the current/latest version -- the full lineage in
+	// chronological order. Returns (nil, nil), not an error, if id doesn't
+	// exist in workspaceID or its current version has already expired
+	// (same lazy-expiry rule Get uses): an unknown/expired id is not a
+	// caller mistake, the same convention this package already uses for
+	// Get's found=false and Search/List's nil-slice "nothing to report"
+	// results. See Store's doc comment for how many prior versions are
+	// actually kept.
 	History(ctx context.Context, workspaceID, id string) ([]Memory, error)
 
 	// List returns every memory in workspaceID matching opts's AgentID/Kind
@@ -116,14 +130,22 @@ type MemoryStore interface {
 // separately in a workspace -> id -> *Memory map, the same shape
 // internal/semantic and internal/toolcache use for their own entries.
 //
-// Store is safe for concurrent use: a single RWMutex guards the records
-// map. (internal/vector.Store guards its own state independently.)
+// history holds every version of a record made obsolete by a later Put,
+// separately from records (the current/latest version), so Get/Search/List's
+// existing performance and shape are untouched by version history -- it's
+// purely additive. Keyed the same way as records (workspaceID -> id), with
+// each id's slice oldest-first and bounded to maxMemoryHistoryPerRecord
+// prior versions (see that const's doc comment).
+//
+// Store is safe for concurrent use: a single RWMutex guards the records and
+// history maps. (internal/vector.Store guards its own state independently.)
 type Store struct {
 	provider embed.Provider
 	vecStore *vector.Store
 
 	mu      sync.RWMutex
-	records map[string]map[string]*Memory // workspaceID -> id -> record
+	records map[string]map[string]*Memory  // workspaceID -> id -> current record
+	history map[string]map[string][]Memory // workspaceID -> id -> prior versions, oldest first
 
 	// now is overridable in tests so TTL-expiry tests don't need real
 	// sleeps; production code always uses time.Now.
@@ -137,6 +159,7 @@ func New(provider embed.Provider) *Store {
 		provider: provider,
 		vecStore: vector.New(),
 		records:  make(map[string]map[string]*Memory),
+		history:  make(map[string]map[string][]Memory),
 		now:      time.Now,
 	}
 }
@@ -197,6 +220,14 @@ func (s *Store) Put(ctx context.Context, m Memory, ttl time.Duration) (string, e
 	if existing, ok := ws[id]; ok {
 		version = existing.Version + 1
 		createdAt = existing.CreatedAt
+		// Capture the pre-overwrite record into history before it's
+		// replaced below. *existing is a value copy of the struct being
+		// made obsolete; its Embedding/Metadata are never mutated in
+		// place by a later Put (each Put builds an entirely new *Memory
+		// rather than mutating the existing one), so this copy stays a
+		// faithful, un-aliased snapshot of what this id looked like at
+		// that version.
+		s.recordHistoryLocked(m.WorkspaceID, id, *existing)
 	}
 
 	rec := &Memory{
@@ -224,6 +255,37 @@ func (s *Store) Put(ctx context.Context, m Memory, ttl time.Duration) (string, e
 	return id, nil
 }
 
+// recordHistoryLocked appends prior (the record a Put is about to overwrite)
+// to id's history log in workspaceID, oldest-first, dropping the oldest
+// entry once maxMemoryHistoryPerRecord is exceeded. Callers must hold s.mu.
+func (s *Store) recordHistoryLocked(workspaceID, id string, prior Memory) {
+	ws, ok := s.history[workspaceID]
+	if !ok {
+		ws = make(map[string][]Memory)
+		s.history[workspaceID] = ws
+	}
+	h := append(ws[id], prior)
+	if len(h) > maxMemoryHistoryPerRecord {
+		h = h[len(h)-maxMemoryHistoryPerRecord:]
+	}
+	ws[id] = h
+}
+
+// deleteHistoryLocked drops id's entire history log in workspaceID, if any.
+// Called whenever id's current record is deleted outright (TTL expiry --
+// see Get/Search/List/History's own expiry handling), since History always
+// reports (nil, nil) once the current version is gone, making any retained
+// prior-version data permanently unreachable through this package's public
+// surface. Deliberately dropping it there rather than leaving it to grow
+// forever is this package's chosen answer to "does expiry also drop
+// history" -- keeping data no caller can ever ask for again would be a pure
+// memory leak, not a feature. Callers must hold s.mu.
+func (s *Store) deleteHistoryLocked(workspaceID, id string) {
+	if ws, ok := s.history[workspaceID]; ok {
+		delete(ws, id)
+	}
+}
+
 // Get implements MemoryStore.Get.
 func (s *Store) Get(ctx context.Context, workspaceID, id string) (Memory, bool, error) {
 	s.mu.Lock()
@@ -240,6 +302,7 @@ func (s *Store) Get(ctx context.Context, workspaceID, id string) (Memory, bool, 
 	if rec.expired(s.now()) {
 		delete(ws, id)
 		s.vecStore.Delete(workspaceID, id)
+		s.deleteHistoryLocked(workspaceID, id)
 		return Memory{}, false, nil
 	}
 	return *rec, true, nil
@@ -290,6 +353,7 @@ func (s *Store) Search(ctx context.Context, workspaceID, query string, opts Sear
 		if rec.expired(now) {
 			delete(ws, r.ID)
 			s.vecStore.Delete(workspaceID, r.ID)
+			s.deleteHistoryLocked(workspaceID, r.ID)
 			continue
 		}
 		if opts.Threshold != nil && r.Score < *opts.Threshold {
@@ -305,12 +369,31 @@ func (s *Store) Search(ctx context.Context, workspaceID, query string, opts Sear
 	return out, nil
 }
 
-// History implements MemoryStore.History. Phase 4 keeps no version-history
-// log (see this package's doc comment), so this always reports
-// ErrHistoryNotImplemented rather than silently returning a single-element
-// slice that would look like real history support.
+// History implements MemoryStore.History.
 func (s *Store) History(ctx context.Context, workspaceID, id string) ([]Memory, error) {
-	return nil, ErrHistoryNotImplemented
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ws, ok := s.records[workspaceID]
+	if !ok {
+		return nil, nil
+	}
+	rec, ok := ws[id]
+	if !ok {
+		return nil, nil
+	}
+	if rec.expired(s.now()) {
+		delete(ws, id)
+		s.vecStore.Delete(workspaceID, id)
+		s.deleteHistoryLocked(workspaceID, id)
+		return nil, nil
+	}
+
+	prior := s.history[workspaceID][id]
+	out := make([]Memory, 0, len(prior)+1)
+	out = append(out, prior...)
+	out = append(out, *rec)
+	return out, nil
 }
 
 // List implements MemoryStore.List.
@@ -329,6 +412,7 @@ func (s *Store) List(ctx context.Context, workspaceID string, opts ListOptions) 
 		if rec.expired(now) {
 			delete(ws, id)
 			s.vecStore.Delete(workspaceID, id)
+			s.deleteHistoryLocked(workspaceID, id)
 			continue
 		}
 		if opts.AgentID != "" && rec.AgentID != opts.AgentID {
