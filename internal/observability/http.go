@@ -54,6 +54,10 @@ func MetricsHandler(m *Metrics) http.Handler {
 		counter("cachepot_embedding_calls_errors_total", "Embedding-provider calls that returned an error.", snap.EmbeddingCallsErrors)
 		gauge("cachepot_embedding_calls_in_flight", "Embedding-provider calls currently in flight.", snap.EmbeddingCallsInFlight)
 
+		counter("cachepot_completion_calls_total", "Total completion-provider calls issued.", snap.CompletionCallsTotal)
+		counter("cachepot_completion_calls_errors_total", "Completion-provider calls that returned an error.", snap.CompletionCallsErrors)
+		gauge("cachepot_completion_calls_in_flight", "Completion-provider calls currently in flight.", snap.CompletionCallsInFlight)
+
 		fmt.Fprintf(w, "# HELP cachepot_command_latency_avg_seconds Average command latency, by command family.\n# TYPE cachepot_command_latency_avg_seconds gauge\n")
 		for _, l := range snap.Latency {
 			fmt.Fprintf(w, "cachepot_command_latency_avg_seconds{family=%q} %g\n", l.Family, float64(l.AvgNanos)/1e9)
@@ -107,6 +111,11 @@ func StatsHandler(m *Metrics, tracker *analytics.Tracker) http.Handler {
 				CallsErrors:   snap.EmbeddingCallsErrors,
 				CallsInFlight: snap.EmbeddingCallsInFlight,
 			},
+			Completion: statsCompletion{
+				CallsTotal:    snap.CompletionCallsTotal,
+				CallsErrors:   snap.CompletionCallsErrors,
+				CallsInFlight: snap.CompletionCallsInFlight,
+			},
 			Latency:   snap.Latency,
 			Analytics: statsAnalyticsFrom(analyticsSnapshot(tracker)),
 		})
@@ -133,6 +142,7 @@ type statsResponse struct {
 	EvictionsTotal      int64                 `json:"evictions_total"`
 	MCP                 statsMCP              `json:"mcp"`
 	Embedding           statsEmbedding        `json:"embedding"`
+	Completion          statsCompletion       `json:"completion"`
 	Latency             []LatencyStats        `json:"latency_by_family"`
 	Analytics           statsAnalytics        `json:"analytics"`
 }
@@ -141,7 +151,11 @@ type statsResponse struct {
 // (internal/analytics.Snapshot), folded into the same /stats document
 // rather than a separate endpoint.
 type statsAnalytics struct {
-	EmbeddingByModel    map[string]statsModelUsage `json:"embedding_by_model"`
+	EmbeddingByModel map[string]statsModelUsage `json:"embedding_by_model"`
+	// CompletionByModel is kept as its own field, separate from
+	// EmbeddingByModel, mirroring analytics.Snapshot's own separation of
+	// embedding cost from completion cost.
+	CompletionByModel   map[string]statsModelUsage `json:"completion_by_model"`
 	MoneySavedTotalUSD  float64                    `json:"money_saved_total_usd"`
 	TopExpensiveEntries []statsExpensiveEntry      `json:"top_expensive_entries"`
 }
@@ -164,12 +178,17 @@ func statsAnalyticsFrom(snap analytics.Snapshot) statsAnalytics {
 	for model, u := range snap.EmbeddingByModel {
 		byModel[model] = statsModelUsage{Tokens: u.Tokens, CostUSD: u.CostUSD, PricingKnown: u.PricingKnown}
 	}
+	completionByModel := make(map[string]statsModelUsage, len(snap.CompletionByModel))
+	for model, u := range snap.CompletionByModel {
+		completionByModel[model] = statsModelUsage{Tokens: u.Tokens, CostUSD: u.CostUSD, PricingKnown: u.PricingKnown}
+	}
 	top := make([]statsExpensiveEntry, len(snap.TopExpensiveEntries))
 	for i, e := range snap.TopExpensiveEntries {
 		top[i] = statsExpensiveEntry{CacheType: e.CacheType, Prompt: e.Prompt, CostUSD: e.Cost, Hits: e.Hits}
 	}
 	return statsAnalytics{
 		EmbeddingByModel:    byModel,
+		CompletionByModel:   completionByModel,
 		MoneySavedTotalUSD:  snap.MoneySavedTotalUSD,
 		TopExpensiveEntries: top,
 	}
@@ -197,6 +216,12 @@ type statsMCP struct {
 }
 
 type statsEmbedding struct {
+	CallsTotal    int64 `json:"calls_total"`
+	CallsErrors   int64 `json:"calls_errors"`
+	CallsInFlight int64 `json:"calls_in_flight"`
+}
+
+type statsCompletion struct {
 	CallsTotal    int64 `json:"calls_total"`
 	CallsErrors   int64 `json:"calls_errors"`
 	CallsInFlight int64 `json:"calls_in_flight"`

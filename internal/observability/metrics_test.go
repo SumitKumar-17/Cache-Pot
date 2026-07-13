@@ -57,6 +57,41 @@ func TestVectorMemoryCounters(t *testing.T) {
 	}
 }
 
+func TestCompletionCallCounters(t *testing.T) {
+	m := NewMetrics()
+	m.CompletionCallStarted()
+	m.CompletionCallFinished(nil)
+	m.CompletionCallStarted()
+	m.CompletionCallFinished(errors.New("boom"))
+
+	snap := m.Snapshot()
+	if snap.CompletionCallsTotal != 2 {
+		t.Fatalf("CompletionCallsTotal = %d, want 2", snap.CompletionCallsTotal)
+	}
+	if snap.CompletionCallsErrors != 1 {
+		t.Fatalf("CompletionCallsErrors = %d, want 1", snap.CompletionCallsErrors)
+	}
+	if snap.CompletionCallsInFlight != 0 {
+		t.Fatalf("CompletionCallsInFlight = %d, want 0 after both calls finished", snap.CompletionCallsInFlight)
+	}
+}
+
+func TestCompletionCallInFlightGauge(t *testing.T) {
+	m := NewMetrics()
+	m.CompletionCallStarted()
+
+	snap := m.Snapshot()
+	if snap.CompletionCallsInFlight != 1 {
+		t.Fatalf("CompletionCallsInFlight = %d, want 1 while a call is outstanding", snap.CompletionCallsInFlight)
+	}
+
+	m.CompletionCallFinished(nil)
+	snap = m.Snapshot()
+	if snap.CompletionCallsInFlight != 0 {
+		t.Fatalf("CompletionCallsInFlight = %d, want 0 after completion", snap.CompletionCallsInFlight)
+	}
+}
+
 func TestMCPCallsByTool(t *testing.T) {
 	m := NewMetrics()
 	m.MCPCallRecorded("remember")

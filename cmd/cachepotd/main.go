@@ -83,6 +83,14 @@ func parseConfig() server.Config {
 	}
 	envOpenAIAPIKey := os.Getenv("OPENAI_API_KEY")
 	envOpenAIAPIBase := os.Getenv("OPENAI_API_BASE")
+	envCompletionProvider := server.DefaultCompletionProvider
+	if v := os.Getenv("CACHEPOT_COMPLETION_PROVIDER"); v != "" {
+		envCompletionProvider = v
+	}
+	envOpenAICompletionModel := server.DefaultOpenAICompletionModel
+	if v := os.Getenv("OPENAI_COMPLETION_MODEL"); v != "" {
+		envOpenAICompletionModel = v
+	}
 	envMCPPort := server.DefaultMCPPort
 	if v := os.Getenv("CACHEPOT_MCP_PORT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -114,6 +122,8 @@ func parseConfig() server.Config {
 	embedProvider := flag.String("embed-provider", envEmbedProvider, `text-embedding backend for CACHE.SEMANTIC: "mock" or "openai" (env CACHEPOT_EMBED_PROVIDER)`)
 	openAIAPIKey := flag.String("openai-api-key", "", "OpenAI API key, required when --embed-provider=openai (env OPENAI_API_KEY)")
 	openAIAPIBase := flag.String("openai-api-base", envOpenAIAPIBase, `OpenAI-compatible API base URL, defaults to OpenAI's own API (env OPENAI_API_BASE)`)
+	completionProvider := flag.String("completion-provider", envCompletionProvider, `text-generation (chat completion) backend for Phase 6's consolidation/graph-extraction features: "mock" or "openai" (env CACHEPOT_COMPLETION_PROVIDER)`)
+	openAICompletionModel := flag.String("openai-completion-model", envOpenAICompletionModel, `OpenAI chat-completion model, used when --completion-provider=openai (env OPENAI_COMPLETION_MODEL)`)
 	mcpPort := flag.Int("mcp-port", envMCPPort, "TCP port for the native MCP (Model Context Protocol) HTTP server; 0 disables it (env CACHEPOT_MCP_PORT)")
 	maxEntries := flag.Int("max-entries", envMaxEntries, "maximum total live keys before eviction kicks in; 0 means unlimited (env CACHEPOT_MAX_ENTRIES)")
 	evictionPolicy := flag.String("eviction-policy", envEvictionPolicy, `eviction policy used once --max-entries is exceeded: "lru" or "weighted" (env CACHEPOT_EVICTION_POLICY)`)
@@ -129,14 +139,16 @@ func parseConfig() server.Config {
 	}
 
 	return server.Config{
-		Port:           *port,
-		Password:       resolvedPassword,
-		MaxConnections: *maxConns,
-		EmbedProvider:  *embedProvider,
-		OpenAIAPIKey:   resolvedOpenAIAPIKey,
-		OpenAIAPIBase:  *openAIAPIBase,
-		MCPPort:        *mcpPort,
-		MaxEntries:     *maxEntries,
-		EvictionPolicy: *evictionPolicy,
+		Port:                  *port,
+		Password:              resolvedPassword,
+		MaxConnections:        *maxConns,
+		EmbedProvider:         *embedProvider,
+		OpenAIAPIKey:          resolvedOpenAIAPIKey,
+		OpenAIAPIBase:         *openAIAPIBase,
+		CompletionProvider:    *completionProvider,
+		OpenAICompletionModel: *openAICompletionModel,
+		MCPPort:               *mcpPort,
+		MaxEntries:            *maxEntries,
+		EvictionPolicy:        *evictionPolicy,
 	}
 }

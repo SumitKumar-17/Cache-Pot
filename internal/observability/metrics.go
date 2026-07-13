@@ -44,6 +44,10 @@ type Metrics struct {
 	embeddingCallsErrors   atomic.Int64
 	embeddingCallsInFlight atomic.Int64
 
+	completionCallsTotal    atomic.Int64
+	completionCallsErrors   atomic.Int64
+	completionCallsInFlight atomic.Int64
+
 	latMu   sync.Mutex
 	latency map[string]*latencyAccumulator
 }
@@ -168,6 +172,25 @@ func (m *Metrics) EmbeddingCallFinished(err error) {
 	}
 }
 
+// CompletionCallStarted records the start of a completion-provider call:
+// increments the total-issued counter and the in-flight gauge. Pair with a
+// deferred CompletionCallFinished. Mirrors EmbeddingCallStarted for
+// Cache-Pot's first text-generation capability (internal/llm).
+func (m *Metrics) CompletionCallStarted() {
+	m.completionCallsTotal.Add(1)
+	m.completionCallsInFlight.Add(1)
+}
+
+// CompletionCallFinished records the end of a completion-provider call:
+// decrements the in-flight gauge, and increments the error counter if err
+// is non-nil.
+func (m *Metrics) CompletionCallFinished(err error) {
+	m.completionCallsInFlight.Add(-1)
+	if err != nil {
+		m.completionCallsErrors.Add(1)
+	}
+}
+
 // RecordCommandLatency records one command's execution latency under the
 // given family (see internal/server/resp's commandFamily), lazily creating
 // that family's accumulator on first use. The family set is small and
@@ -235,6 +258,10 @@ type Snapshot struct {
 	EmbeddingCallsErrors   int64
 	EmbeddingCallsInFlight int64
 
+	CompletionCallsTotal    int64
+	CompletionCallsErrors   int64
+	CompletionCallsInFlight int64
+
 	Latency []LatencyStats
 }
 
@@ -284,6 +311,10 @@ func (m *Metrics) Snapshot() Snapshot {
 		EmbeddingCallsTotal:    m.embeddingCallsTotal.Load(),
 		EmbeddingCallsErrors:   m.embeddingCallsErrors.Load(),
 		EmbeddingCallsInFlight: m.embeddingCallsInFlight.Load(),
+
+		CompletionCallsTotal:    m.completionCallsTotal.Load(),
+		CompletionCallsErrors:   m.completionCallsErrors.Load(),
+		CompletionCallsInFlight: m.completionCallsInFlight.Load(),
 
 		Latency: lat,
 	}

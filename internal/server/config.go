@@ -34,8 +34,28 @@ type Config struct {
 	// OpenAIAPIBase overrides the base URL used when EmbedProvider ==
 	// "openai" (default "https://api.openai.com/v1"). Set this to point
 	// at an OpenAI-compatible endpoint (an Azure OpenAI deployment, a
-	// self-hosted gateway, etc.) instead of OpenAI's own API.
+	// self-hosted gateway, etc.) instead of OpenAI's own API. This same
+	// base URL is also used for completions when CompletionProvider ==
+	// "openai" -- one OpenAI account/endpoint serves both.
 	OpenAIAPIBase string
+
+	// CompletionProvider selects the text-*generation* (chat completion)
+	// backend that will power Phase 6's consolidation/summarization and
+	// knowledge-graph entity extraction (landing in later commits): "mock"
+	// (default) or "openai".
+	//
+	// "mock" uses internal/llm.NewMock, a deterministic, dependency-free
+	// provider intended for local dev/testing only -- it performs NO real
+	// language understanding or generation, only a deterministic echo of
+	// its input. It is not suitable for production use.
+	//
+	// "openai" uses internal/llm.NewOpenAI against OpenAI's real
+	// chat-completions API and requires OpenAIAPIKey to be set (the same
+	// key used for EmbedProvider == "openai").
+	CompletionProvider string
+	// OpenAICompletionModel selects the OpenAI chat-completion model used
+	// when CompletionProvider == "openai" (default "gpt-4o-mini").
+	OpenAICompletionModel string
 
 	// MCPPort is the TCP port the native MCP (Model Context Protocol) HTTP
 	// server listens on, exposing the same SemanticCache/PromptCache/
@@ -62,6 +82,12 @@ const (
 	// DefaultEmbedProvider is "mock" so cachepotd runs out of the box
 	// with no external dependencies/API keys required.
 	DefaultEmbedProvider = "mock"
+	// DefaultCompletionProvider is "mock" for the same reason as
+	// DefaultEmbedProvider.
+	DefaultCompletionProvider = "mock"
+	// DefaultOpenAICompletionModel is a real, current, reasonably-priced
+	// OpenAI chat-completion model.
+	DefaultOpenAICompletionModel = "gpt-4o-mini"
 	// DefaultMCPPort is deliberately not a well-known port either, and
 	// sits right after DefaultPort so the two listeners are easy to
 	// remember together. Set --mcp-port/CACHEPOT_MCP_PORT to 0 to disable
@@ -80,11 +106,13 @@ const (
 // required).
 func DefaultConfig() Config {
 	return Config{
-		Port:           DefaultPort,
-		MaxConnections: DefaultMaxConnections,
-		EmbedProvider:  DefaultEmbedProvider,
-		MCPPort:        DefaultMCPPort,
-		MaxEntries:     DefaultMaxEntries,
-		EvictionPolicy: DefaultEvictionPolicy,
+		Port:                  DefaultPort,
+		MaxConnections:        DefaultMaxConnections,
+		EmbedProvider:         DefaultEmbedProvider,
+		CompletionProvider:    DefaultCompletionProvider,
+		OpenAICompletionModel: DefaultOpenAICompletionModel,
+		MCPPort:               DefaultMCPPort,
+		MaxEntries:            DefaultMaxEntries,
+		EvictionPolicy:        DefaultEvictionPolicy,
 	}
 }

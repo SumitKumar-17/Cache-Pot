@@ -20,6 +20,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/eviction"
+	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
@@ -96,22 +97,34 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	// once, regardless of caller.
 	provider = observability.InstrumentProvider(provider, s.metrics, s.analytics)
 
+	completionProvider, err := buildCompletionProvider(s.cfg)
+	if err != nil {
+		return err
+	}
+	// Wrapped once here, exactly like the embed.Provider above, so every
+	// future consumer (Phase 6's consolidation/summarization and
+	// knowledge-graph extraction, landing in later commits) shares the
+	// same instrumented instance and therefore the same metrics/cost
+	// tracking, regardless of how many places end up calling Complete.
+	completionProvider = observability.InstrumentCompletionProvider(completionProvider, s.metrics, s.analytics)
+
 	registry := resp.NewRegistry()
 	resp.RegisterAll(registry)
 
 	s.deps = &resp.Deps{
-		Engine:        engine,
-		Auth:          auth.New(s.cfg.Password),
-		Metrics:       s.metrics,
-		Logger:        s.logger,
-		PubSub:        resp.NewPubSub(),
-		Registry:      registry,
-		SemanticCache: semantic.New(provider),
-		PromptCache:   semantic.NewPromptCache(),
-		ToolCache:     toolcache.New(),
-		VectorStore:   vector.New(),
-		MemoryStore:   memory.New(provider),
-		Analytics:     s.analytics,
+		Engine:             engine,
+		Auth:               auth.New(s.cfg.Password),
+		Metrics:            s.metrics,
+		Logger:             s.logger,
+		PubSub:             resp.NewPubSub(),
+		Registry:           registry,
+		SemanticCache:      semantic.New(provider),
+		PromptCache:        semantic.NewPromptCache(),
+		ToolCache:          toolcache.New(),
+		VectorStore:        vector.New(),
+		MemoryStore:        memory.New(provider),
+		Analytics:          s.analytics,
+		CompletionProvider: completionProvider,
 	}
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())
@@ -253,6 +266,30 @@ func buildEmbedProvider(cfg Config) (embed.Provider, error) {
 		return embed.NewOpenAI(cfg.OpenAIAPIKey, "", cfg.OpenAIAPIBase), nil
 	default:
 		return nil, fmt.Errorf("server: unknown embed provider %q (want \"mock\" or \"openai\")", cfg.EmbedProvider)
+	}
+}
+
+// buildCompletionProvider constructs the llm.CompletionProvider selected
+// by cfg.CompletionProvider ("mock" or "openai", case-insensitive; empty
+// defaults to "mock"), mirroring buildEmbedProvider exactly: it returns an
+// error at startup -- rather than lazily at first use -- if "openai" is
+// selected without an API key, or if CompletionProvider names anything
+// else, so misconfiguration is loud and immediate.
+func buildCompletionProvider(cfg Config) (llm.CompletionProvider, error) {
+	switch strings.ToLower(cfg.CompletionProvider) {
+	case "", "mock":
+		// mock is for local dev/testing only: it performs NO real
+		// language understanding or generation, only a deterministic
+		// echo of its input, sufficient to exercise Phase 6 consumers'
+		// plumbing offline but not suitable for production use.
+		return llm.NewMock(), nil
+	case "openai":
+		if cfg.OpenAIAPIKey == "" {
+			return nil, fmt.Errorf("server: completion-provider=openai requires an OpenAI API key (--openai-api-key or OPENAI_API_KEY)")
+		}
+		return llm.NewOpenAI(cfg.OpenAIAPIKey, cfg.OpenAICompletionModel, cfg.OpenAIAPIBase), nil
+	default:
+		return nil, fmt.Errorf("server: unknown completion provider %q (want \"mock\" or \"openai\")", cfg.CompletionProvider)
 	}
 }
 

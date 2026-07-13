@@ -7,6 +7,7 @@ import (
 
 	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
+	"github.com/SumitKumar-17/cache-pot/internal/llm"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
@@ -53,6 +54,15 @@ type Deps struct {
 	// the instrumented embed.Provider. It is a separate concern from
 	// Metrics, which owns hit/miss counting and hit-rate math.
 	Analytics *analytics.Tracker
+
+	// CompletionProvider is Cache-Pot's first text-*generation* provider
+	// (Phase 6, see internal/llm): chat-style completions, as opposed to
+	// the embeddings-only providers above. No RESP handler consumes it
+	// yet as of this commit -- it is threaded into Deps here so Phase 6's
+	// consolidation (real LLM summarization) and knowledge-graph
+	// (real entity/relationship extraction) work, landing in later
+	// commits, can reach it without another signature-threading pass.
+	CompletionProvider llm.CompletionProvider
 }
 
 // ClientState is per-connection state: authentication, the selected

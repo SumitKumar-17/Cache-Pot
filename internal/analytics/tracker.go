@@ -28,6 +28,34 @@ var pricePerMillionTokensUSD = map[string]float64{
 	"text-embedding-ada-002": 0.10,
 }
 
+// completionPricePerMillionTokensUSD is a small, hand-maintained table of
+// published OpenAI chat-completion-model pricing, in USD per 1,000,000
+// tokens.
+//
+// These are the prices published on OpenAI's pricing page as of when this
+// code was written (2026) and WILL drift over time -- operators should
+// verify current pricing against OpenAI's own pricing page before treating
+// any cost figure derived from this table as authoritative. It exists to
+// give a reasonable estimate, not a bill.
+//
+// Unlike the embedding table above, this is a single BLENDED rate per
+// model, not separate input/output rates. OpenAI's real chat-completion
+// pricing splits prompt ("input") and completion ("output") tokens at
+// different rates, but RecordCompletionUsage is fed a single
+// TokenUsage.TotalTokens figure (see llm.TokenUsage) rather than the
+// separate prompt_tokens/completion_tokens the chat-completions API
+// response actually carries -- plumbing those through would require
+// widening llm.CompletionProvider's return shape, which isn't warranted
+// yet. The blended rate below is a reasonable midpoint between each
+// model's published input and output prices, clearly documented as an
+// approximation rather than an exact bill.
+var completionPricePerMillionTokensUSD = map[string]float64{
+	// gpt-4o-mini: $0.15/1M input, $0.60/1M output -> blended ~$0.375/1M.
+	"gpt-4o-mini": 0.375,
+	// gpt-4o: $2.50/1M input, $10.00/1M output -> blended ~$6.25/1M.
+	"gpt-4o": 6.25,
+}
+
 // ModelUsage is a point-in-time summary of one embedding model's recorded
 // token usage and estimated cost.
 type ModelUsage struct {
@@ -68,6 +96,12 @@ type Tracker struct {
 	mu sync.Mutex
 
 	byModel map[string]*ModelUsage
+	// completionByModel is kept as a separate map from byModel (embedding
+	// usage) even though ModelUsage's shape is identical, so embedding
+	// cost and completion cost are never accidentally merged into one
+	// undifferentiated number -- Snapshot exposes them under distinct
+	// field names (EmbeddingByModel vs. CompletionByModel).
+	completionByModel map[string]*ModelUsage
 
 	moneySavedTotalUSD float64
 	// top holds at most maxTopEntries entries, unique by (CacheType,
@@ -78,7 +112,10 @@ type Tracker struct {
 
 // New builds an empty Tracker.
 func New() *Tracker {
-	return &Tracker{byModel: make(map[string]*ModelUsage)}
+	return &Tracker{
+		byModel:           make(map[string]*ModelUsage),
+		completionByModel: make(map[string]*ModelUsage),
+	}
 }
 
 // normalizeModelName accepts either a raw model name (e.g.
@@ -113,6 +150,40 @@ func (t *Tracker) RecordEmbeddingUsage(model string, tokens int) {
 	}
 	u.Tokens += int64(tokens)
 	if price, known := pricePerMillionTokensUSD[name]; known {
+		u.PricingKnown = true
+		u.CostUSD += float64(tokens) * price / 1_000_000
+	}
+}
+
+// RecordCompletionUsage records that a chat-completion call against model
+// consumed tokens tokens (a single blended total -- see
+// completionPricePerMillionTokensUSD's doc comment for why this isn't
+// split into prompt/completion tokens), accumulating per-model totals and,
+// for recognized models, an estimated USD cost. tokens <= 0 is a no-op
+// (there is nothing real to record). model may be a raw model name or a
+// CompletionProvider.Name()-shaped "provider:model" string.
+//
+// Kept as a distinct method (and a distinct internal map) from
+// RecordEmbeddingUsage rather than a shared "RecordUsage(kind, model,
+// tokens)" so embedding cost and completion cost can never be
+// accidentally merged into one bucket -- Snapshot surfaces them
+// separately.
+func (t *Tracker) RecordCompletionUsage(model string, tokens int) {
+	if tokens <= 0 {
+		return
+	}
+	name := normalizeModelName(model)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	u, ok := t.completionByModel[name]
+	if !ok {
+		u = &ModelUsage{}
+		t.completionByModel[name] = u
+	}
+	u.Tokens += int64(tokens)
+	if price, known := completionPricePerMillionTokensUSD[name]; known {
 		u.PricingKnown = true
 		u.CostUSD += float64(tokens) * price / 1_000_000
 	}
@@ -171,7 +242,12 @@ func (t *Tracker) RecordCacheHitSavings(cacheType, prompt string, cost float64) 
 // following the same Snapshot()-returns-a-value-type convention
 // observability.Metrics already uses.
 type Snapshot struct {
-	EmbeddingByModel    map[string]ModelUsage
+	EmbeddingByModel map[string]ModelUsage
+	// CompletionByModel is kept as its own field, separate from
+	// EmbeddingByModel, so embedding cost and chat-completion cost stay
+	// clearly labeled/distinguishable rather than merged into one
+	// undifferentiated total.
+	CompletionByModel   map[string]ModelUsage
 	MoneySavedTotalUSD  float64
 	TopExpensiveEntries []ExpensiveEntry
 }
@@ -187,12 +263,18 @@ func (t *Tracker) Snapshot() Snapshot {
 		byModel[name] = *u
 	}
 
+	completionByModel := make(map[string]ModelUsage, len(t.completionByModel))
+	for name, u := range t.completionByModel {
+		completionByModel[name] = *u
+	}
+
 	top := make([]ExpensiveEntry, len(t.top))
 	copy(top, t.top)
 	sort.Slice(top, func(i, j int) bool { return top[i].Cost > top[j].Cost })
 
 	return Snapshot{
 		EmbeddingByModel:    byModel,
+		CompletionByModel:   completionByModel,
 		MoneySavedTotalUSD:  t.moneySavedTotalUSD,
 		TopExpensiveEntries: top,
 	}

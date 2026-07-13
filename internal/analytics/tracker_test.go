@@ -78,6 +78,101 @@ func TestRecordEmbeddingUsageNonPositiveTokensNoOp(t *testing.T) {
 	}
 }
 
+func TestRecordCompletionUsageKnownModelAccumulatesCost(t *testing.T) {
+	tr := New()
+	tr.RecordCompletionUsage("gpt-4o-mini", 1_000_000)
+	tr.RecordCompletionUsage("gpt-4o-mini", 1_000_000)
+
+	snap := tr.Snapshot()
+	got, ok := snap.CompletionByModel["gpt-4o-mini"]
+	if !ok {
+		t.Fatalf("no usage recorded for gpt-4o-mini; snapshot: %+v", snap)
+	}
+	if got.Tokens != 2_000_000 {
+		t.Fatalf("Tokens = %d, want 2,000,000", got.Tokens)
+	}
+	if !got.PricingKnown {
+		t.Fatal("expected PricingKnown = true for a recognized model")
+	}
+	wantCost := 0.75 // 2 * $0.375/1M tokens
+	if diff := got.CostUSD - wantCost; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("CostUSD = %v, want %v", got.CostUSD, wantCost)
+	}
+}
+
+func TestRecordCompletionUsageAcceptsProviderNameForm(t *testing.T) {
+	tr := New()
+	tr.RecordCompletionUsage("openai:gpt-4o", 1_000_000)
+
+	snap := tr.Snapshot()
+	got, ok := snap.CompletionByModel["gpt-4o"]
+	if !ok {
+		t.Fatalf("no usage recorded for gpt-4o; snapshot: %+v", snap)
+	}
+	if got.Tokens != 1_000_000 {
+		t.Fatalf("Tokens = %d, want 1,000,000", got.Tokens)
+	}
+	wantCost := 6.25
+	if diff := got.CostUSD - wantCost; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("CostUSD = %v, want %v", got.CostUSD, wantCost)
+	}
+}
+
+func TestRecordCompletionUsageUnknownModelNoFabricatedCost(t *testing.T) {
+	tr := New()
+	tr.RecordCompletionUsage("some-future-model-nobody-has-heard-of", 500)
+
+	snap := tr.Snapshot()
+	got, ok := snap.CompletionByModel["some-future-model-nobody-has-heard-of"]
+	if !ok {
+		t.Fatalf("expected tokens to still be tracked for an unknown model; snapshot: %+v", snap)
+	}
+	if got.Tokens != 500 {
+		t.Fatalf("Tokens = %d, want 500", got.Tokens)
+	}
+	if got.PricingKnown {
+		t.Fatal("expected PricingKnown = false for an unrecognized model")
+	}
+	if got.CostUSD != 0 {
+		t.Fatalf("CostUSD = %v, want 0 for an unrecognized model (no fabricated price)", got.CostUSD)
+	}
+}
+
+func TestRecordCompletionUsageNonPositiveTokensNoOp(t *testing.T) {
+	tr := New()
+	tr.RecordCompletionUsage("gpt-4o-mini", 0)
+	tr.RecordCompletionUsage("gpt-4o-mini", -5)
+
+	snap := tr.Snapshot()
+	if len(snap.CompletionByModel) != 0 {
+		t.Fatalf("expected no recorded usage for non-positive token counts, got %+v", snap.CompletionByModel)
+	}
+}
+
+// TestRecordCompletionUsageSeparateFromEmbeddingUsage verifies embedding
+// and completion usage are tracked in clearly separate buckets, never
+// merged into one undifferentiated total, even when recorded against the
+// same Tracker in an interleaved fashion.
+func TestRecordCompletionUsageSeparateFromEmbeddingUsage(t *testing.T) {
+	tr := New()
+	tr.RecordEmbeddingUsage("text-embedding-3-small", 1_000_000)
+	tr.RecordCompletionUsage("gpt-4o-mini", 1_000_000)
+
+	snap := tr.Snapshot()
+	if len(snap.EmbeddingByModel) != 1 {
+		t.Fatalf("expected exactly 1 embedding model recorded, got %+v", snap.EmbeddingByModel)
+	}
+	if len(snap.CompletionByModel) != 1 {
+		t.Fatalf("expected exactly 1 completion model recorded, got %+v", snap.CompletionByModel)
+	}
+	if _, ok := snap.EmbeddingByModel["gpt-4o-mini"]; ok {
+		t.Fatal("completion usage leaked into EmbeddingByModel")
+	}
+	if _, ok := snap.CompletionByModel["text-embedding-3-small"]; ok {
+		t.Fatal("embedding usage leaked into CompletionByModel")
+	}
+}
+
 func TestRecordCacheHitSavingsAccumulatesAndSkipsNonPositive(t *testing.T) {
 	tr := New()
 	tr.RecordCacheHitSavings("semantic", "what is kubernetes", 0.01)
