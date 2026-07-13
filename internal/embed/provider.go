@@ -32,3 +32,20 @@ type Provider interface {
 	// model that produced them.
 	Name() string
 }
+
+// TokenUsage reports how many tokens an embedding call consumed, when the
+// underlying provider can report it.
+type TokenUsage struct {
+	TotalTokens int
+}
+
+// UsageEmbedder is an optional Provider capability: a provider may
+// implement it to report token usage for a batch embed call, returned
+// alongside the vectors rather than via a stateful side channel (which
+// would be racy under concurrent use). The deterministic mock provider
+// does NOT implement this -- it makes no real API call, so it has no real
+// notion of token cost; callers must type-assert and treat its absence as
+// "usage unknown," never fabricate a number.
+type UsageEmbedder interface {
+	EmbedBatchWithUsage(ctx context.Context, texts []string) ([][]float32, TokenUsage, error)
+}

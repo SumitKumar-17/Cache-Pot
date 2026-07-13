@@ -146,3 +146,80 @@ func TestMetricsAndStatsEndpoints(t *testing.T) {
 		t.Fatalf("/stats commands_total = 0, want > 0")
 	}
 }
+
+// TestAnalyticsStatsAndDashboard drives real CACHE.SEMANTIC/CACHE.PROMPT
+// COST/savings activity through the RESP server, then asserts /stats'
+// "analytics" section reflects it and /dashboard renders it as HTML.
+func TestAnalyticsStatsAndDashboard(t *testing.T) {
+	respAddr, mcpBaseURL := startServerWithMCP(t)
+	rdb := newClient(respAddr)
+	defer rdb.Close()
+
+	ctx := context.Background()
+	if err := rdb.Do(ctx, "CACHE.SEMANTIC", "SET", "what is kubernetes", "an orchestrator", "COST", "0.015").Err(); err != nil {
+		t.Fatalf("CACHE.SEMANTIC SET with COST: %v", err)
+	}
+	if err := rdb.Do(ctx, "CACHE.SEMANTIC", "GET", "what is kubernetes").Err(); err != nil {
+		t.Fatalf("CACHE.SEMANTIC GET (hit): %v", err)
+	}
+	if err := rdb.Do(ctx, "CACHE.PROMPT", "SET", "Summarize: {{.x}}", `{"x":1}`, "gpt-test", "a summary", "COST", "0.02").Err(); err != nil {
+		t.Fatalf("CACHE.PROMPT SET with COST: %v", err)
+	}
+	if err := rdb.Do(ctx, "CACHE.PROMPT", "GET", "Summarize: {{.x}}", `{"x":1}`, "gpt-test").Err(); err != nil {
+		t.Fatalf("CACHE.PROMPT GET (hit): %v", err)
+	}
+
+	// /stats: the "analytics" section should reflect the money saved from
+	// both COST-tagged hits above.
+	resp, err := http.Get(mcpBaseURL + "/stats")
+	if err != nil {
+		t.Fatalf("GET /stats: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/stats status = %d, want 200", resp.StatusCode)
+	}
+	var stats struct {
+		Analytics struct {
+			MoneySavedTotalUSD  float64 `json:"money_saved_total_usd"`
+			TopExpensiveEntries []struct {
+				CacheType string  `json:"cache_type"`
+				Prompt    string  `json:"prompt"`
+				CostUSD   float64 `json:"cost_usd"`
+				Hits      int64   `json:"hits"`
+			} `json:"top_expensive_entries"`
+		} `json:"analytics"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatalf("decode /stats JSON: %v", err)
+	}
+	wantSaved := 0.015 + 0.02
+	if diff := stats.Analytics.MoneySavedTotalUSD - wantSaved; diff > 1e-9 || diff < -1e-9 {
+		t.Fatalf("/stats analytics.money_saved_total_usd = %v, want %v", stats.Analytics.MoneySavedTotalUSD, wantSaved)
+	}
+	if len(stats.Analytics.TopExpensiveEntries) != 2 {
+		t.Fatalf("/stats analytics.top_expensive_entries = %+v, want 2 entries", stats.Analytics.TopExpensiveEntries)
+	}
+
+	// /dashboard: plain HTML, status 200, containing at least the
+	// money-saved figure we just drove.
+	resp, err = http.Get(mcpBaseURL + "/dashboard")
+	if err != nil {
+		t.Fatalf("GET /dashboard: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("/dashboard status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("/dashboard Content-Type = %q, want it to contain text/html", ct)
+	}
+	html := string(body)
+	if !strings.Contains(html, "0.0350") {
+		t.Fatalf("/dashboard missing expected money-saved figure (0.0350); body:\n%s", html)
+	}
+	if !strings.Contains(html, "what is kubernetes") {
+		t.Fatalf("/dashboard missing expected top-expensive-entry prompt; body:\n%s", html)
+	}
+}

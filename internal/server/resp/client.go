@@ -5,6 +5,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
@@ -45,6 +46,13 @@ type Deps struct {
 	ToolCache     *toolcache.ToolCache
 	VectorStore   *vector.Store
 	MemoryStore   *memory.Store
+
+	// Analytics tracks embedding token/cost usage and cache-hit money
+	// savings (Phase 5's cost-analytics layer, see internal/analytics),
+	// fed by CACHE.SEMANTIC/CACHE.PROMPT's optional COST argument and by
+	// the instrumented embed.Provider. It is a separate concern from
+	// Metrics, which owns hit/miss counting and hit-rate math.
+	Analytics *analytics.Tracker
 }
 
 // ClientState is per-connection state: authentication, the selected

@@ -169,3 +169,79 @@ func TestOpenAINewProviderBaseURL(t *testing.T) {
 		})
 	}
 }
+
+// TestOpenAIEmbedBatchWithUsageReturnsTokenCount verifies EmbedBatchWithUsage
+// parses the response's "usage.total_tokens" field -- the field the old
+// EmbedBatch implementation unmarshaled and immediately discarded.
+func TestOpenAIEmbedBatchWithUsageReturnsTokenCount(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"embedding": [0.1, 0.2, 0.3], "index": 0},
+				{"embedding": [0.4, 0.5, 0.6], "index": 1}
+			],
+			"usage": {"prompt_tokens": 7, "total_tokens": 7}
+		}`))
+	}))
+	defer srv.Close()
+
+	p := newTestOpenAIProvider(srv.URL, srv.Client())
+
+	vecs, usage, err := p.EmbedBatchWithUsage(context.Background(), []string{"first", "second"})
+	if err != nil {
+		t.Fatalf("EmbedBatchWithUsage: %v", err)
+	}
+	if len(vecs) != 2 {
+		t.Fatalf("expected 2 vectors, got %d", len(vecs))
+	}
+	if usage.TotalTokens != 7 {
+		t.Fatalf("usage.TotalTokens = %d, want 7", usage.TotalTokens)
+	}
+}
+
+// TestOpenAIEmbedBatchDiscardsUsageButStillWorks verifies the refactored
+// EmbedBatch (now delegating to EmbedBatchWithUsage) still returns the
+// right vectors when the response carries a usage field it doesn't
+// surface.
+func TestOpenAIEmbedBatchDiscardsUsageButStillWorks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [{"embedding": [1, 2, 3], "index": 0}],
+			"usage": {"prompt_tokens": 3, "total_tokens": 3}
+		}`))
+	}))
+	defer srv.Close()
+
+	p := newTestOpenAIProvider(srv.URL, srv.Client())
+
+	vecs, err := p.EmbedBatch(context.Background(), []string{"hello"})
+	if err != nil {
+		t.Fatalf("EmbedBatch: %v", err)
+	}
+	if len(vecs) != 1 || vecs[0][0] != 1 {
+		t.Fatalf("EmbedBatch returned unexpected vectors: %v", vecs)
+	}
+}
+
+// TestOpenAIEmbedBatchWithUsageMissingUsageField verifies a response with
+// no usage field at all reports TotalTokens 0 rather than erroring --
+// absence of usage data is honestly reported as zero, not guessed at.
+func TestOpenAIEmbedBatchWithUsageMissingUsageField(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data": [{"embedding": [1, 2, 3], "index": 0}]}`))
+	}))
+	defer srv.Close()
+
+	p := newTestOpenAIProvider(srv.URL, srv.Client())
+
+	_, usage, err := p.EmbedBatchWithUsage(context.Background(), []string{"hello"})
+	if err != nil {
+		t.Fatalf("EmbedBatchWithUsage: %v", err)
+	}
+	if usage.TotalTokens != 0 {
+		t.Fatalf("usage.TotalTokens = %d, want 0 for a response with no usage field", usage.TotalTokens)
+	}
+}

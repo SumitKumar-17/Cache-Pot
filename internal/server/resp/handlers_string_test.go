@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
@@ -33,6 +34,7 @@ func newTestDeps(t *testing.T) *Deps {
 		ToolCache:     toolcache.New(),
 		VectorStore:   vector.New(),
 		MemoryStore:   memory.New(embed.NewMock(8)),
+		Analytics:     analytics.New(),
 	}
 }
 

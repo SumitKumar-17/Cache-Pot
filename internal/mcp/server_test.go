@@ -13,6 +13,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
@@ -38,6 +39,7 @@ type testEnv struct {
 	toolCache     *toolcache.ToolCache
 	vectorStore   *vector.Store
 	memoryStore   *memory.Store
+	analytics     *analytics.Tracker
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -48,8 +50,9 @@ func newTestEnv(t *testing.T) *testEnv {
 	toolCache := toolcache.New()
 	vectorStore := vector.New()
 	memoryStore := memory.New(embed.NewMock(8))
+	tracker := analytics.New()
 
-	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore, observability.NewMetrics())
+	srv := mcp.New(semanticCache, promptCache, toolCache, vectorStore, memoryStore, observability.NewMetrics(), tracker)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
@@ -72,6 +75,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		toolCache:     toolCache,
 		vectorStore:   vectorStore,
 		memoryStore:   memoryStore,
+		analytics:     tracker,
 	}
 }
 
@@ -235,6 +239,74 @@ func TestCachePromptSetThenGet(t *testing.T) {
 	}, &out)
 	if !out.Found || out.Response != "A greeting." {
 		t.Fatalf("cache_prompt_get: got %+v, want found=true response=%q", out, "A greeting.")
+	}
+}
+
+func TestCacheSemanticCostRecordsSavingsOnHit(t *testing.T) {
+	env := newTestEnv(t)
+
+	env.call("cache_semantic_set", map[string]any{
+		"prompt":   "What is Kubernetes?",
+		"response": "K8s is a container orchestrator.",
+		"cost":     0.01,
+	}, nil)
+
+	var out mcp.CacheSemanticGetOutput
+	env.call("cache_semantic_get", map[string]any{"prompt": "What is Kubernetes?"}, &out)
+	if !out.Found {
+		t.Fatal("expected a hit")
+	}
+
+	snap := env.analytics.Snapshot()
+	if snap.MoneySavedTotalUSD != 0.01 {
+		t.Fatalf("MoneySavedTotalUSD = %v, want 0.01", snap.MoneySavedTotalUSD)
+	}
+}
+
+func TestCacheSemanticNoCostRecordsNoSavingsViaMCP(t *testing.T) {
+	env := newTestEnv(t)
+
+	env.call("cache_semantic_set", map[string]any{
+		"prompt":   "What is Kubernetes?",
+		"response": "K8s is a container orchestrator.",
+	}, nil)
+
+	var out mcp.CacheSemanticGetOutput
+	env.call("cache_semantic_get", map[string]any{"prompt": "What is Kubernetes?"}, &out)
+	if !out.Found {
+		t.Fatal("expected a hit")
+	}
+
+	snap := env.analytics.Snapshot()
+	if snap.MoneySavedTotalUSD != 0 {
+		t.Fatalf("MoneySavedTotalUSD = %v, want exactly 0 when no cost was ever supplied", snap.MoneySavedTotalUSD)
+	}
+}
+
+func TestCachePromptCostRecordsSavingsOnHit(t *testing.T) {
+	env := newTestEnv(t)
+
+	env.call("cache_prompt_set", map[string]any{
+		"template":       "Summarize: {{.text}}",
+		"variables_json": `{"text":"hello world"}`,
+		"model":          "gpt-test",
+		"response":       "A greeting.",
+		"cost":           0.03,
+	}, nil)
+
+	var out mcp.CachePromptGetOutput
+	env.call("cache_prompt_get", map[string]any{
+		"template":       "Summarize: {{.text}}",
+		"variables_json": `{"text":"hello world"}`,
+		"model":          "gpt-test",
+	}, &out)
+	if !out.Found {
+		t.Fatal("expected a hit")
+	}
+
+	snap := env.analytics.Snapshot()
+	if snap.MoneySavedTotalUSD != 0.03 {
+		t.Fatalf("MoneySavedTotalUSD = %v, want 0.03", snap.MoneySavedTotalUSD)
 	}
 }
 

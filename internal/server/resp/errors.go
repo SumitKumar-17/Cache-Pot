@@ -51,6 +51,11 @@ const ErrNoSuchKeyMsg = "ERR no such key"
 // variables_json argument is not valid JSON.
 const ErrInvalidJSONMsg = "ERR invalid variables JSON"
 
+// ErrCostNegativeMsg is returned by CACHE.SEMANTIC/CACHE.PROMPT SET when
+// the optional COST argument parses as a valid float but is negative --
+// a cost can be zero (unknown/not reported) but never negative.
+const ErrCostNegativeMsg = "ERR COST must be a non-negative float"
+
 // ErrInvalidToolArgsJSONMsg is returned by TOOL.CACHE SET/GET when the
 // supplied args_json argument is not valid JSON.
 const ErrInvalidToolArgsJSONMsg = "ERR invalid args JSON"

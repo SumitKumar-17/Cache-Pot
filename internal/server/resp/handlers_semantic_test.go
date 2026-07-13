@@ -129,3 +129,86 @@ func TestCachePromptWrongArity(t *testing.T) {
 		t.Fatalf("CACHE.PROMPT SET wrong arity = %q, want %q", out, want)
 	}
 }
+
+func TestCacheSemanticCostRecordsSavingsOnHit(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "CACHE.SEMANTIC", "SET", "What is Kubernetes?", "K8s is a container orchestrator.", "COST", "0.01")
+	if want := "+OK\r\n"; string(out) != want {
+		t.Fatalf("CACHE.SEMANTIC SET with COST reply = %q, want %q", out, want)
+	}
+
+	execCommand(t, cs, "CACHE.SEMANTIC", "GET", "What is Kubernetes?") // hit
+
+	snap := cs.Deps.Analytics.Snapshot()
+	if snap.MoneySavedTotalUSD != 0.01 {
+		t.Fatalf("MoneySavedTotalUSD = %v, want 0.01", snap.MoneySavedTotalUSD)
+	}
+	if len(snap.TopExpensiveEntries) != 1 || snap.TopExpensiveEntries[0].CacheType != "semantic" {
+		t.Fatalf("TopExpensiveEntries = %+v, want one semantic entry", snap.TopExpensiveEntries)
+	}
+}
+
+func TestCacheSemanticNoCostRecordsNoSavings(t *testing.T) {
+	cs := newTestClientState(t)
+
+	execCommand(t, cs, "CACHE.SEMANTIC", "SET", "What is Kubernetes?", "K8s is a container orchestrator.")
+	execCommand(t, cs, "CACHE.SEMANTIC", "GET", "What is Kubernetes?") // hit, but no COST was ever supplied
+
+	snap := cs.Deps.Analytics.Snapshot()
+	if snap.MoneySavedTotalUSD != 0 {
+		t.Fatalf("MoneySavedTotalUSD = %v, want exactly 0 when no COST was ever supplied", snap.MoneySavedTotalUSD)
+	}
+	if len(snap.TopExpensiveEntries) != 0 {
+		t.Fatalf("TopExpensiveEntries = %+v, want none", snap.TopExpensiveEntries)
+	}
+}
+
+func TestCacheSemanticNegativeCostIsError(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "CACHE.SEMANTIC", "SET", "prompt", "response", "COST", "-1")
+	want := "-" + ErrCostNegativeMsg + "\r\n"
+	if string(out) != want {
+		t.Fatalf("CACHE.SEMANTIC SET negative COST = %q, want %q", out, want)
+	}
+}
+
+func TestCacheSemanticNonNumericCostIsError(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "CACHE.SEMANTIC", "SET", "prompt", "response", "COST", "not-a-number")
+	want := "-" + ErrNotFloatMsg + "\r\n"
+	if string(out) != want {
+		t.Fatalf("CACHE.SEMANTIC SET non-numeric COST = %q, want %q", out, want)
+	}
+}
+
+func TestCachePromptCostRecordsSavingsOnHit(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "CACHE.PROMPT", "SET", "Hello {{name}}", `{"name":"Sumit"}`, "gpt-4", "Hello Sumit!", "COST", "0.02")
+	if want := "+OK\r\n"; string(out) != want {
+		t.Fatalf("CACHE.PROMPT SET with COST reply = %q, want %q", out, want)
+	}
+
+	execCommand(t, cs, "CACHE.PROMPT", "GET", "Hello {{name}}", `{"name":"Sumit"}`, "gpt-4") // hit
+
+	snap := cs.Deps.Analytics.Snapshot()
+	if snap.MoneySavedTotalUSD != 0.02 {
+		t.Fatalf("MoneySavedTotalUSD = %v, want 0.02", snap.MoneySavedTotalUSD)
+	}
+	if len(snap.TopExpensiveEntries) != 1 || snap.TopExpensiveEntries[0].CacheType != "prompt" {
+		t.Fatalf("TopExpensiveEntries = %+v, want one prompt entry", snap.TopExpensiveEntries)
+	}
+}
+
+func TestCachePromptNegativeCostIsError(t *testing.T) {
+	cs := newTestClientState(t)
+
+	out := execCommand(t, cs, "CACHE.PROMPT", "SET", "tmpl", "{}", "gpt-4", "resp", "COST", "-0.5")
+	want := "-" + ErrCostNegativeMsg + "\r\n"
+	if string(out) != want {
+		t.Fatalf("CACHE.PROMPT SET negative COST = %q, want %q", out, want)
+	}
+}

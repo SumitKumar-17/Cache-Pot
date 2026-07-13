@@ -156,7 +156,7 @@ func (f *fakeProvider) Name() string    { return "fake" }
 
 func TestInstrumentProviderSuccess(t *testing.T) {
 	m := NewMetrics()
-	p := InstrumentProvider(&fakeProvider{}, m)
+	p := InstrumentProvider(&fakeProvider{}, m, nil)
 
 	if _, err := p.Embed(context.Background(), "hello"); err != nil {
 		t.Fatalf("Embed: %v", err)
@@ -185,7 +185,7 @@ func TestInstrumentProviderSuccess(t *testing.T) {
 
 func TestInstrumentProviderError(t *testing.T) {
 	m := NewMetrics()
-	p := InstrumentProvider(&fakeProvider{err: errors.New("boom")}, m)
+	p := InstrumentProvider(&fakeProvider{err: errors.New("boom")}, m, nil)
 
 	if _, err := p.Embed(context.Background(), "hello"); err == nil {
 		t.Fatal("expected an error")
@@ -231,7 +231,7 @@ func TestStatsHandlerRendersJSON(t *testing.T) {
 	m.SemanticCacheMiss()
 
 	rec := httptest.NewRecorder()
-	StatsHandler(m).ServeHTTP(rec, httptest.NewRequest("GET", "/stats", nil))
+	StatsHandler(m, nil).ServeHTTP(rec, httptest.NewRequest("GET", "/stats", nil))
 
 	body := rec.Body.String()
 	if !strings.Contains(body, `"semantic_cache"`) {

@@ -16,11 +16,11 @@ func TestSemanticCacheExactDuplicateHit(t *testing.T) {
 	c := newTestCache()
 	ctx := context.Background()
 
-	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0); err != nil {
+	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0, 0); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	resp, found, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.7", 0.85)
+	resp, found, _, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.7", 0.85)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -39,11 +39,11 @@ func TestSemanticCacheCaseWhitespaceVariantHit(t *testing.T) {
 	c := newTestCache()
 	ctx := context.Background()
 
-	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0); err != nil {
+	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0, 0); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	resp, found, err := c.Get(ctx, "  what IS the   capital of France?  ", "gpt-4", "0.7", 0.85)
+	resp, found, _, err := c.Get(ctx, "  what IS the   capital of France?  ", "gpt-4", "0.7", 0.85)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -59,11 +59,11 @@ func TestSemanticCacheUnrelatedPromptMiss(t *testing.T) {
 	c := newTestCache()
 	ctx := context.Background()
 
-	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0); err != nil {
+	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0, 0); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	_, found, err := c.Get(ctx, "Tell me a joke about penguins", "gpt-4", "0.7", 0.85)
+	_, found, _, err := c.Get(ctx, "Tell me a joke about penguins", "gpt-4", "0.7", 0.85)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -76,11 +76,11 @@ func TestSemanticCacheDifferentModelPartition(t *testing.T) {
 	c := newTestCache()
 	ctx := context.Background()
 
-	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0); err != nil {
+	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0, 0); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	_, found, err := c.Get(ctx, "What is the capital of France?", "claude", "0.7", 0.85)
+	_, found, _, err := c.Get(ctx, "What is the capital of France?", "claude", "0.7", 0.85)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -93,11 +93,11 @@ func TestSemanticCacheDifferentTempPartition(t *testing.T) {
 	c := newTestCache()
 	ctx := context.Background()
 
-	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0); err != nil {
+	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 0, 0); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
-	_, found, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.9", 0.85)
+	_, found, _, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.9", 0.85)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -110,18 +110,18 @@ func TestSemanticCacheTTLExpiry(t *testing.T) {
 	c := newTestCache()
 	ctx := context.Background()
 
-	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 30*time.Millisecond); err != nil {
+	if err := c.Set(ctx, "What is the capital of France?", "gpt-4", "0.7", "Paris", 30*time.Millisecond, 0); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 
 	// Before expiry: still a hit.
-	if _, found, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.7", 0.85); err != nil || !found {
+	if _, found, _, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.7", 0.85); err != nil || !found {
 		t.Fatalf("expected hit before TTL expiry: found=%v err=%v", found, err)
 	}
 
 	time.Sleep(60 * time.Millisecond)
 
-	if _, found, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.7", 0.85); err != nil || found {
+	if _, found, _, err := c.Get(ctx, "What is the capital of France?", "gpt-4", "0.7", 0.85); err != nil || found {
 		t.Fatalf("expected miss after TTL expiry: found=%v err=%v", found, err)
 	}
 }

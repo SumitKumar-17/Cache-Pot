@@ -47,6 +47,10 @@ func TemplateKey(template, variablesJSON, model string) (string, error) {
 type promptEntry struct {
 	response  string
 	expiresAt *time.Time
+	// cost is the optional, caller-reported dollar cost of originally
+	// producing response, mirroring semanticEntry.cost in cache.go -- see
+	// that field's doc comment for the full rationale.
+	cost float64
 }
 
 // PromptCache is an exact-match cache keyed by an already-computed key
@@ -76,7 +80,10 @@ func NewPromptCache() *PromptCache {
 }
 
 // Set stores response under key. ttl <= 0 means the entry never expires.
-func (p *PromptCache) Set(key string, response string, ttl time.Duration) {
+// cost is the optional, caller-reported dollar cost of producing response;
+// <= 0 means "unknown/not reported" and Get will never report savings for
+// this entry.
+func (p *PromptCache) Set(key string, response string, ttl time.Duration, cost float64) {
 	var expiresAt *time.Time
 	if ttl > 0 {
 		t := p.now().Add(ttl)
@@ -85,23 +92,26 @@ func (p *PromptCache) Set(key string, response string, ttl time.Duration) {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.entries[key] = promptEntry{response: response, expiresAt: expiresAt}
+	p.entries[key] = promptEntry{response: response, expiresAt: expiresAt, cost: cost}
 }
 
-// Get looks up key, lazily evicting it first if it has expired.
-func (p *PromptCache) Get(key string) (response string, found bool) {
+// Get looks up key, lazily evicting it first if it has expired. cost is
+// the hit entry's stored cost (0 if none was ever supplied, or on a miss)
+// -- see SemanticCache.Get's doc comment for why this package surfaces it
+// rather than recording savings itself.
+func (p *PromptCache) Get(key string) (response string, found bool, cost float64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	e, ok := p.entries[key]
 	if !ok {
-		return "", false
+		return "", false, 0
 	}
 	if e.expired(p.now()) {
 		delete(p.entries, key)
-		return "", false
+		return "", false, 0
 	}
-	return e.response, true
+	return e.response, true, e.cost
 }
 
 func (e *promptEntry) expired(now time.Time) bool {

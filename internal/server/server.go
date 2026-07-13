@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/auth"
 	"github.com/SumitKumar-17/cache-pot/internal/embed"
 	"github.com/SumitKumar-17/cache-pot/internal/mcp"
@@ -35,10 +36,11 @@ const shutdownGrace = 5 * time.Second
 // Server owns the RESP listener and its lifecycle: accepting connections
 // (subject to Config.MaxConnections), and shutting down gracefully.
 type Server struct {
-	cfg     Config
-	logger  *slog.Logger
-	metrics *observability.Metrics
-	deps    *resp.Deps
+	cfg       Config
+	logger    *slog.Logger
+	metrics   *observability.Metrics
+	analytics *analytics.Tracker
+	deps      *resp.Deps
 }
 
 // Run builds a Server from cfg and runs it until ctx is canceled or the
@@ -60,9 +62,10 @@ func Run(ctx context.Context, cfg Config) error {
 // port and the server binding it.
 func RunListener(ctx context.Context, cfg Config, ln net.Listener) error {
 	s := &Server{
-		cfg:     cfg,
-		logger:  observability.NewLogger(slog.LevelInfo),
-		metrics: observability.NewMetrics(),
+		cfg:       cfg,
+		logger:    observability.NewLogger(slog.LevelInfo),
+		metrics:   observability.NewMetrics(),
+		analytics: analytics.New(),
 	}
 	return s.run(ctx, ln)
 }
@@ -78,8 +81,11 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	// Wrap once, here, so SemanticCache and MemoryStore below share the same
 	// instrumented instance -- every Embed/EmbedBatch call either makes,
 	// regardless of caller, is recorded on s.metrics (see
-	// internal/observability's embed_instrument.go).
-	provider = observability.InstrumentProvider(provider, s.metrics)
+	// internal/observability's embed_instrument.go). Passing s.analytics
+	// here too means that, for providers reporting real token usage (the
+	// OpenAI provider), every embedding call's cost is recorded exactly
+	// once, regardless of caller.
+	provider = observability.InstrumentProvider(provider, s.metrics, s.analytics)
 
 	registry := resp.NewRegistry()
 	resp.RegisterAll(registry)
@@ -96,6 +102,7 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		ToolCache:     toolcache.New(),
 		VectorStore:   vector.New(),
 		MemoryStore:   memory.New(provider),
+		Analytics:     s.analytics,
 	}
 
 	s.logger.Info("cachepot listening", "addr", ln.Addr().String())
@@ -106,17 +113,17 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 	// and a RESP client observe the exact same cache/vector-store/memory
 	// state, with no adapter layer or second storage in between.
 	//
-	// /metrics (Prometheus text) and /stats (JSON) are mounted on the same
-	// listener/mux, alongside the MCP handler at "/" -- http.ServeMux
-	// (Go 1.22+) prefers a more specific registered pattern like "/metrics"
-	// over the catch-all "/", so this doesn't disturb existing MCP client
-	// connections at the documented http://host:6381/ address. This does
-	// mean /metrics and /stats are only reachable when the MCP listener
-	// itself is enabled (--mcp-port != 0) -- they share its port rather
-	// than getting a dedicated one, to avoid adding a second listener/flag
-	// for a need that doesn't (yet) justify one. A standalone
-	// --metrics-port would be a reasonable future addition if that
-	// coupling proves undesirable.
+	// /metrics (Prometheus text), /stats (JSON), and /dashboard (operator
+	// HTML) are mounted on the same listener/mux, alongside the MCP
+	// handler at "/" -- http.ServeMux (Go 1.22+) prefers a more specific
+	// registered pattern like "/metrics" over the catch-all "/", so this
+	// doesn't disturb existing MCP client connections at the documented
+	// http://host:6381/ address. This does mean /metrics, /stats, and
+	// /dashboard are only reachable when the MCP listener itself is
+	// enabled (--mcp-port != 0) -- they share its port rather than getting
+	// a dedicated one, to avoid adding a second listener/flag for a need
+	// that doesn't (yet) justify one. A standalone --metrics-port would be
+	// a reasonable future addition if that coupling proves undesirable.
 	var mcpSrv *http.Server
 	var mcpDone chan struct{}
 	if s.cfg.MCPPort != 0 {
@@ -124,11 +131,12 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		if err != nil {
 			return fmt.Errorf("server: listen on MCP port %d: %w", s.cfg.MCPPort, err)
 		}
-		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore, s.metrics)
+		mcpServer := mcp.New(s.deps.SemanticCache, s.deps.PromptCache, s.deps.ToolCache, s.deps.VectorStore, s.deps.MemoryStore, s.metrics, s.analytics)
 		mux := http.NewServeMux()
 		mux.Handle("/", mcpServer.Handler())
 		mux.Handle("/metrics", observability.MetricsHandler(s.metrics))
-		mux.Handle("/stats", observability.StatsHandler(s.metrics))
+		mux.Handle("/stats", observability.StatsHandler(s.metrics, s.analytics))
+		mux.Handle("/dashboard", observability.DashboardHandler(s.metrics, s.analytics))
 		mcpSrv = &http.Server{Handler: mux}
 		mcpDone = make(chan struct{})
 		go func() {

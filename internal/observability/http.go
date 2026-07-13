@@ -3,7 +3,11 @@ package observability
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
+	"sort"
+
+	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 )
 
 // MetricsHandler renders m.Snapshot() as Prometheus text exposition format
@@ -64,11 +68,15 @@ func MetricsHandler(m *Metrics) http.Handler {
 	})
 }
 
-// StatsHandler renders m.Snapshot() as JSON -- the same underlying data as
-// MetricsHandler, in a form meant for the Phase 5 dashboard (and any other
-// JSON consumer) to render directly, including a few precomputed
-// convenience fields (hit rates) that Prometheus text format doesn't carry.
-func StatsHandler(m *Metrics) http.Handler {
+// StatsHandler renders m.Snapshot() plus tracker.Snapshot() as a single
+// JSON document -- the same underlying Metrics data as MetricsHandler, in
+// a form meant for the Phase 5 dashboard (and any other JSON consumer) to
+// render directly, including a few precomputed convenience fields (hit
+// rates) that Prometheus text format doesn't carry, plus an "analytics"
+// section carrying Phase 5's cost/savings/token data. tracker may be nil,
+// in which case the analytics section reports its zero value rather than
+// panicking.
+func StatsHandler(m *Metrics, tracker *analytics.Tracker) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		snap := m.Snapshot()
 		w.Header().Set("Content-Type", "application/json")
@@ -97,9 +105,19 @@ func StatsHandler(m *Metrics) http.Handler {
 				CallsErrors:   snap.EmbeddingCallsErrors,
 				CallsInFlight: snap.EmbeddingCallsInFlight,
 			},
-			Latency: snap.Latency,
+			Latency:   snap.Latency,
+			Analytics: statsAnalyticsFrom(analyticsSnapshot(tracker)),
 		})
 	})
+}
+
+// analyticsSnapshot returns tracker.Snapshot(), or the zero Snapshot if
+// tracker is nil, so callers never need a nil check of their own.
+func analyticsSnapshot(tracker *analytics.Tracker) analytics.Snapshot {
+	if tracker == nil {
+		return analytics.Snapshot{}
+	}
+	return tracker.Snapshot()
 }
 
 type statsResponse struct {
@@ -113,6 +131,45 @@ type statsResponse struct {
 	MCP                 statsMCP              `json:"mcp"`
 	Embedding           statsEmbedding        `json:"embedding"`
 	Latency             []LatencyStats        `json:"latency_by_family"`
+	Analytics           statsAnalytics        `json:"analytics"`
+}
+
+// statsAnalytics is the JSON shape of Phase 5's cost/savings/token layer
+// (internal/analytics.Snapshot), folded into the same /stats document
+// rather than a separate endpoint.
+type statsAnalytics struct {
+	EmbeddingByModel    map[string]statsModelUsage `json:"embedding_by_model"`
+	MoneySavedTotalUSD  float64                    `json:"money_saved_total_usd"`
+	TopExpensiveEntries []statsExpensiveEntry      `json:"top_expensive_entries"`
+}
+
+type statsModelUsage struct {
+	Tokens       int64   `json:"tokens"`
+	CostUSD      float64 `json:"cost_usd"`
+	PricingKnown bool    `json:"pricing_known"`
+}
+
+type statsExpensiveEntry struct {
+	CacheType string  `json:"cache_type"`
+	Prompt    string  `json:"prompt"`
+	CostUSD   float64 `json:"cost_usd"`
+	Hits      int64   `json:"hits"`
+}
+
+func statsAnalyticsFrom(snap analytics.Snapshot) statsAnalytics {
+	byModel := make(map[string]statsModelUsage, len(snap.EmbeddingByModel))
+	for model, u := range snap.EmbeddingByModel {
+		byModel[model] = statsModelUsage{Tokens: u.Tokens, CostUSD: u.CostUSD, PricingKnown: u.PricingKnown}
+	}
+	top := make([]statsExpensiveEntry, len(snap.TopExpensiveEntries))
+	for i, e := range snap.TopExpensiveEntries {
+		top[i] = statsExpensiveEntry{CacheType: e.CacheType, Prompt: e.Prompt, CostUSD: e.Cost, Hits: e.Hits}
+	}
+	return statsAnalytics{
+		EmbeddingByModel:    byModel,
+		MoneySavedTotalUSD:  snap.MoneySavedTotalUSD,
+		TopExpensiveEntries: top,
+	}
 }
 
 type statsConnections struct {
@@ -141,3 +198,156 @@ type statsEmbedding struct {
 	CallsErrors   int64 `json:"calls_errors"`
 	CallsInFlight int64 `json:"calls_in_flight"`
 }
+
+// DashboardHandler renders a plain server-rendered HTML operator/debug
+// view (no JS framework, no external CSS/JS dependency, matching this
+// project's "no unnecessary dependency" precedent) over the same
+// Metrics/Tracker data /stats exposes as JSON: money saved, embedding
+// tokens consumed (by model, with cost where the model's pricing is
+// known), average/max latency per command family, hit rate per cache
+// type, and the most expensive cached prompts.
+//
+// Deliberately not shown: a "tokens avoided" figure. A CACHE.SEMANTIC hit
+// still re-embeds the query prompt to compare similarity, so no embedding
+// tokens are actually avoided by a cache hit -- only the (unmeasured,
+// caller-side) LLM completion cost is. Showing a fabricated "tokens
+// avoided" number would contradict this package's stated honesty
+// requirement, so the dashboard sticks to what's actually tracked: tokens
+// consumed, and dollars saved (from caller-reported COST).
+func DashboardHandler(m *Metrics, tracker *analytics.Tracker) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		view := buildDashboardView(m.Snapshot(), analyticsSnapshot(tracker))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := dashboardTemplate.Execute(w, view); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+}
+
+type dashboardView struct {
+	Connections   statsConnections
+	CommandsTotal int64
+	ErrorsTotal   int64
+	Caches        []dashboardCacheRow
+	Latency       []LatencyStats
+	Models        []dashboardModelRow
+	MoneySavedUSD float64
+	TopEntries    []analytics.ExpensiveEntry
+}
+
+type dashboardCacheRow struct {
+	Name string
+	statsCache
+}
+
+type dashboardModelRow struct {
+	Model string
+	analytics.ModelUsage
+}
+
+func buildDashboardView(snap Snapshot, aSnap analytics.Snapshot) dashboardView {
+	caches := []dashboardCacheRow{
+		{Name: "semantic_cache", statsCache: statsCacheFrom(snap.SemanticCache)},
+		{Name: "prompt_cache", statsCache: statsCacheFrom(snap.PromptCache)},
+		{Name: "tool_cache", statsCache: statsCacheFrom(snap.ToolCache)},
+	}
+
+	latency := make([]LatencyStats, len(snap.Latency))
+	copy(latency, snap.Latency)
+	sort.Slice(latency, func(i, j int) bool { return latency[i].Family < latency[j].Family })
+
+	models := make([]dashboardModelRow, 0, len(aSnap.EmbeddingByModel))
+	for name, u := range aSnap.EmbeddingByModel {
+		models = append(models, dashboardModelRow{Model: name, ModelUsage: u})
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].Model < models[j].Model })
+
+	return dashboardView{
+		Connections:   statsConnections{Total: snap.ConnectionsTotal, Active: snap.ConnectionsActive, Rejected: snap.ConnectionsRejected},
+		CommandsTotal: snap.CommandsTotal,
+		ErrorsTotal:   snap.ErrorsTotal,
+		Caches:        caches,
+		Latency:       latency,
+		Models:        models,
+		MoneySavedUSD: aSnap.MoneySavedTotalUSD,
+		TopEntries:    aSnap.TopExpensiveEntries,
+	}
+}
+
+// avgMillis and maxMillis convert LatencyStats' nanosecond fields to
+// milliseconds for display, exposed to the template as methods on
+// LatencyStats via these package-level template funcs (html/template
+// funcs can't be methods on a type defined elsewhere, so they're plain
+// functions instead).
+func avgMillis(l LatencyStats) float64 { return float64(l.AvgNanos) / 1e6 }
+func maxMillis(l LatencyStats) float64 { return float64(l.MaxNanos) / 1e6 }
+func mulf(a, b float64) float64        { return a * b }
+
+var dashboardTemplate = template.Must(template.New("dashboard").Funcs(template.FuncMap{
+	"avgMillis": avgMillis,
+	"maxMillis": maxMillis,
+	"mulf":      mulf,
+}).Parse(dashboardHTML))
+
+const dashboardHTML = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cache-Pot Dashboard</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .25rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: .5rem; background: #fff; }
+  th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #eee; font-size: .9rem; }
+  th { background: #f0f0f0; }
+  .stat { display: inline-block; margin-right: 2rem; margin-top: .5rem; }
+  .stat .value { font-size: 1.6rem; font-weight: 600; display: block; }
+  .stat .label { font-size: .8rem; color: #666; }
+  .muted { color: #888; font-size: .85rem; }
+</style>
+</head>
+<body>
+<h1>Cache-Pot Dashboard</h1>
+<p class="muted">Operator/debug view over live process state -- not a marketing surface. Refresh the page for updated figures.</p>
+
+<div>
+  <div class="stat"><span class="value">${{printf "%.4f" .MoneySavedUSD}}</span><span class="label">money saved (from caller-reported COST)</span></div>
+  <div class="stat"><span class="value">{{.CommandsTotal}}</span><span class="label">commands total</span></div>
+  <div class="stat"><span class="value">{{.ErrorsTotal}}</span><span class="label">errors total</span></div>
+  <div class="stat"><span class="value">{{.Connections.Active}}</span><span class="label">connections active</span></div>
+</div>
+
+<h2>Cache hit rate</h2>
+<table>
+<tr><th>cache</th><th>hits</th><th>misses</th><th>hit rate</th></tr>
+{{range .Caches}}<tr><td>{{.Name}}</td><td>{{.Hits}}</td><td>{{.Misses}}</td><td>{{printf "%.1f%%" (mulf .HitRate 100)}}</td></tr>
+{{end}}
+</table>
+
+<h2>Latency by command family</h2>
+<table>
+<tr><th>family</th><th>count</th><th>avg (ms)</th><th>max (ms)</th></tr>
+{{range .Latency}}<tr><td>{{.Family}}</td><td>{{.Count}}</td><td>{{printf "%.3f" (avgMillis .)}}</td><td>{{printf "%.3f" (maxMillis .)}}</td></tr>
+{{end}}
+</table>
+
+<h2>Embedding tokens consumed, by model</h2>
+<table>
+<tr><th>model</th><th>tokens</th><th>estimated cost (USD)</th></tr>
+{{range .Models}}<tr><td>{{.Model}}</td><td>{{.Tokens}}</td><td>{{if .PricingKnown}}{{printf "$%.6f" .CostUSD}}{{else}}<span class="muted">unknown model, cost not estimated</span>{{end}}</td></tr>
+{{else}}<tr><td colspan="3" class="muted">no embedding usage recorded yet</td></tr>
+{{end}}
+</table>
+
+<h2>Most expensive cached prompts (hit at least once)</h2>
+<table>
+<tr><th>cache</th><th>prompt / template</th><th>cost (USD)</th><th>hits</th></tr>
+{{range .TopEntries}}<tr><td>{{.CacheType}}</td><td>{{.Prompt}}</td><td>{{printf "$%.4f" .Cost}}</td><td>{{.Hits}}</td></tr>
+{{else}}<tr><td colspan="4" class="muted">no COST-tagged cache hits recorded yet</td></tr>
+{{end}}
+</table>
+
+</body>
+</html>
+`

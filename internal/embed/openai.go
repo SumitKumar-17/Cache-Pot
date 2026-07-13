@@ -87,12 +87,17 @@ type openAIEmbeddingRequest struct {
 }
 
 // openAIEmbeddingResponse is the relevant subset of the response body for
-// POST /v1/embeddings.
+// POST /v1/embeddings. Usage is real OpenAI response data (the
+// "usage.total_tokens" field) that used to be unmarshaled and immediately
+// discarded; EmbedBatchWithUsage now surfaces it to callers instead.
 type openAIEmbeddingResponse struct {
 	Data []struct {
 		Embedding []float32 `json:"embedding"`
 		Index     int       `json:"index"`
 	} `json:"data"`
+	Usage struct {
+		TotalTokens int `json:"total_tokens"`
+	} `json:"usage"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error"`
@@ -109,33 +114,43 @@ func (p *openAIProvider) Embed(ctx context.Context, text string) ([]float32, err
 
 // EmbedBatch embeds multiple texts in a single HTTP request, which is how
 // OpenAI's API natively supports batching (the "input" field accepts an
-// array).
+// array). It delegates to EmbedBatchWithUsage and discards the token-usage
+// figure, so there is exactly one HTTP call implementation.
 func (p *openAIProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	vecs, _, err := p.EmbedBatchWithUsage(ctx, texts)
+	return vecs, err
+}
+
+// EmbedBatchWithUsage is like EmbedBatch but additionally reports the
+// number of tokens OpenAI billed the request for (parsed from the
+// response's "usage.total_tokens" field), implementing the optional
+// embed.UsageEmbedder capability.
+func (p *openAIProvider) EmbedBatchWithUsage(ctx context.Context, texts []string) ([][]float32, TokenUsage, error) {
 	if len(texts) == 0 {
-		return nil, nil
+		return nil, TokenUsage{}, nil
 	}
 
 	reqBody, err := json.Marshal(openAIEmbeddingRequest{Model: p.model, Input: texts})
 	if err != nil {
-		return nil, fmt.Errorf("embed: marshal openai request: %w", err)
+		return nil, TokenUsage{}, fmt.Errorf("embed: marshal openai request: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL, bytes.NewReader(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("embed: build openai request: %w", err)
+		return nil, TokenUsage{}, fmt.Errorf("embed: build openai request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("embed: openai request failed: %w", err)
+		return nil, TokenUsage{}, fmt.Errorf("embed: openai request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("embed: read openai response: %w", err)
+		return nil, TokenUsage{}, fmt.Errorf("embed: read openai response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -143,26 +158,26 @@ func (p *openAIProvider) EmbedBatch(ctx context.Context, texts []string) ([][]fl
 		if len(snippet) > maxOpenAIErrorBodySnippet {
 			snippet = snippet[:maxOpenAIErrorBodySnippet] + "...(truncated)"
 		}
-		return nil, fmt.Errorf("embed: openai returned status %d: %s", resp.StatusCode, snippet)
+		return nil, TokenUsage{}, fmt.Errorf("embed: openai returned status %d: %s", resp.StatusCode, snippet)
 	}
 
 	var parsed openAIEmbeddingResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return nil, fmt.Errorf("embed: decode openai response: %w", err)
+		return nil, TokenUsage{}, fmt.Errorf("embed: decode openai response: %w", err)
 	}
 	if parsed.Error != nil {
-		return nil, fmt.Errorf("embed: openai returned an error: %s", parsed.Error.Message)
+		return nil, TokenUsage{}, fmt.Errorf("embed: openai returned an error: %s", parsed.Error.Message)
 	}
 	if len(parsed.Data) != len(texts) {
-		return nil, fmt.Errorf("embed: expected %d embeddings from openai, got %d", len(texts), len(parsed.Data))
+		return nil, TokenUsage{}, fmt.Errorf("embed: expected %d embeddings from openai, got %d", len(texts), len(parsed.Data))
 	}
 
 	out := make([][]float32, len(texts))
 	for _, d := range parsed.Data {
 		if d.Index < 0 || d.Index >= len(out) {
-			return nil, fmt.Errorf("embed: openai response index %d out of range [0,%d)", d.Index, len(out))
+			return nil, TokenUsage{}, fmt.Errorf("embed: openai response index %d out of range [0,%d)", d.Index, len(out))
 		}
 		out[d.Index] = d.Embedding
 	}
-	return out, nil
+	return out, TokenUsage{TotalTokens: parsed.Usage.TotalTokens}, nil
 }

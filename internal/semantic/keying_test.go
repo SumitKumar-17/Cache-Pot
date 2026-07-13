@@ -88,13 +88,13 @@ func TestPromptCacheSetGetRoundTrip(t *testing.T) {
 		t.Fatalf("TemplateKey: %v", err)
 	}
 
-	if _, found := p.Get(key); found {
+	if _, found, _ := p.Get(key); found {
 		t.Fatal("expected miss before Set")
 	}
 
-	p.Set(key, "Hello Sumit!", 0)
+	p.Set(key, "Hello Sumit!", 0, 0)
 
-	resp, found := p.Get(key)
+	resp, found, _ := p.Get(key)
 	if !found {
 		t.Fatal("expected hit after Set")
 	}
@@ -105,15 +105,15 @@ func TestPromptCacheSetGetRoundTrip(t *testing.T) {
 
 func TestPromptCacheTTLExpiry(t *testing.T) {
 	p := NewPromptCache()
-	p.Set("k", "v", 30*time.Millisecond)
+	p.Set("k", "v", 30*time.Millisecond, 0)
 
-	if _, found := p.Get("k"); !found {
+	if _, found, _ := p.Get("k"); !found {
 		t.Fatal("expected hit before TTL expiry")
 	}
 
 	time.Sleep(60 * time.Millisecond)
 
-	if _, found := p.Get("k"); found {
+	if _, found, _ := p.Get("k"); found {
 		t.Fatal("expected miss after TTL expiry")
 	}
 }

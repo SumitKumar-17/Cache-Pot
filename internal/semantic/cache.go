@@ -20,6 +20,14 @@ type semanticEntry struct {
 	embedding []float32
 	response  string
 	expiresAt *time.Time
+	// cost is the optional, caller-reported dollar cost of originally
+	// producing response (e.g. the LLM completion cost the caller paid).
+	// It defaults to 0 when the caller never supplies one via CACHE.
+	// SEMANTIC SET's optional COST argument -- internal/semantic knows
+	// nothing about internal/analytics; it just carries this value back
+	// out of Get so the RESP/MCP layer (which holds the shared
+	// *analytics.Tracker) can record any money-saved savings itself.
+	cost float64
 }
 
 func (e *semanticEntry) expired(now time.Time) bool {
@@ -78,8 +86,10 @@ func partitionKey(model, temp string) string {
 }
 
 // Set embeds prompt and stores it alongside response in the (model, temp)
-// partition. ttl <= 0 means the entry never expires.
-func (c *SemanticCache) Set(ctx context.Context, prompt, model, temp, response string, ttl time.Duration) error {
+// partition. ttl <= 0 means the entry never expires. cost is the optional,
+// caller-reported dollar cost of producing response; <= 0 means "unknown/
+// not reported" and Get will never report savings for this entry.
+func (c *SemanticCache) Set(ctx context.Context, prompt, model, temp, response string, ttl time.Duration, cost float64) error {
 	vec, err := c.provider.Embed(ctx, prompt)
 	if err != nil {
 		return err
@@ -91,7 +101,7 @@ func (c *SemanticCache) Set(ctx context.Context, prompt, model, temp, response s
 		expiresAt = &t
 	}
 
-	e := semanticEntry{prompt: prompt, embedding: vec, response: response, expiresAt: expiresAt}
+	e := semanticEntry{prompt: prompt, embedding: vec, response: response, expiresAt: expiresAt, cost: cost}
 
 	key := partitionKey(model, temp)
 	c.mu.Lock()
@@ -104,10 +114,14 @@ func (c *SemanticCache) Set(ctx context.Context, prompt, model, temp, response s
 // closest previously-stored prompt, reporting a hit if that closest
 // entry's cosine similarity to prompt is >= threshold. Expired entries
 // encountered during the scan are evicted lazily and never considered.
-func (c *SemanticCache) Get(ctx context.Context, prompt, model, temp string, threshold float64) (response string, found bool, err error) {
+// cost is the hit entry's stored cost (0 if none was ever supplied, or on
+// a miss) -- callers holding a *analytics.Tracker should record savings
+// from it themselves; internal/semantic deliberately doesn't import
+// internal/analytics.
+func (c *SemanticCache) Get(ctx context.Context, prompt, model, temp string, threshold float64) (response string, found bool, cost float64, err error) {
 	vec, err := c.provider.Embed(ctx, prompt)
 	if err != nil {
-		return "", false, err
+		return "", false, 0, err
 	}
 
 	key := partitionKey(model, temp)
@@ -139,7 +153,7 @@ func (c *SemanticCache) Get(ctx context.Context, prompt, model, temp string, thr
 	c.partitions[key] = kept
 
 	if bestIdx < 0 || bestScore < threshold {
-		return "", false, nil
+		return "", false, 0, nil
 	}
-	return kept[bestIdx].response, true, nil
+	return kept[bestIdx].response, true, kept[bestIdx].cost, nil
 }

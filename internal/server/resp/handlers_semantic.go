@@ -2,6 +2,7 @@ package resp
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func handleCacheSemantic(cs *ClientState, args []string) Reply {
 
 // handleCacheSemanticSet implements:
 //
-//	CACHE.SEMANTIC SET <prompt> <response> [MODEL <model>] [TEMP <temperature>] [TTL <seconds>]
+//	CACHE.SEMANTIC SET <prompt> <response> [MODEL <model>] [TEMP <temperature>] [TTL <seconds>] [COST <dollars>]
 func handleCacheSemanticSet(cs *ClientState, args []string) Reply {
 	// args: CACHE.SEMANTIC SET <prompt> <response> [opts...]
 	if len(args) < 4 {
@@ -49,6 +50,7 @@ func handleCacheSemanticSet(cs *ClientState, args []string) Reply {
 	model := defaultSemanticModel
 	temp := defaultSemanticTemp
 	var ttl time.Duration
+	var cost float64
 
 	for i := 4; i < len(args); i += 2 {
 		if i+1 >= len(args) {
@@ -72,12 +74,18 @@ func handleCacheSemanticSet(cs *ClientState, args []string) Reply {
 			} else {
 				ttl = 0
 			}
+		case "COST":
+			c, err := parseCostArg(args[i+1])
+			if err != nil {
+				return Err(err.Error())
+			}
+			cost = c
 		default:
 			return Err(ErrSyntaxMsg)
 		}
 	}
 
-	if err := cs.Deps.SemanticCache.Set(context.Background(), prompt, model, temp, response, ttl); err != nil {
+	if err := cs.Deps.SemanticCache.Set(context.Background(), prompt, model, temp, response, ttl, cost); err != nil {
 		return Err("ERR " + err.Error())
 	}
 	return OK
@@ -119,7 +127,7 @@ func handleCacheSemanticGet(cs *ClientState, args []string) Reply {
 		}
 	}
 
-	response, found, err := cs.Deps.SemanticCache.Get(context.Background(), prompt, model, temp, threshold)
+	response, found, cost, err := cs.Deps.SemanticCache.Get(context.Background(), prompt, model, temp, threshold)
 	if err != nil {
 		return Err("ERR " + err.Error())
 	}
@@ -128,7 +136,25 @@ func handleCacheSemanticGet(cs *ClientState, args []string) Reply {
 		return NullBulk()
 	}
 	cs.Deps.Metrics.SemanticCacheHit()
+	if cost > 0 {
+		cs.Deps.Analytics.RecordCacheHitSavings("semantic", prompt, cost)
+	}
 	return BulkString(response)
+}
+
+// parseCostArg parses a CACHE.SEMANTIC/CACHE.PROMPT SET COST argument: a
+// non-negative float, in dollars. A negative or non-numeric value is
+// rejected outright rather than silently clamped, so a caller's mistake
+// doesn't get folded into money-saved accounting unnoticed.
+func parseCostArg(s string) (float64, error) {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, errors.New(ErrNotFloatMsg)
+	}
+	if v < 0 {
+		return 0, errors.New(ErrCostNegativeMsg)
+	}
+	return v, nil
 }
 
 func handleCachePrompt(cs *ClientState, args []string) Reply {
@@ -144,9 +170,9 @@ func handleCachePrompt(cs *ClientState, args []string) Reply {
 
 // handleCachePromptSet implements:
 //
-//	CACHE.PROMPT SET <template> <variables_json> <model> <response> [TTL <seconds>]
+//	CACHE.PROMPT SET <template> <variables_json> <model> <response> [TTL <seconds>] [COST <dollars>]
 func handleCachePromptSet(cs *ClientState, args []string) Reply {
-	// args: CACHE.PROMPT SET <template> <variables_json> <model> <response> [TTL secs]
+	// args: CACHE.PROMPT SET <template> <variables_json> <model> <response> [TTL secs] [COST dollars]
 	if len(args) < 6 {
 		return Err(ErrWrongNumberOfArgs("cache.prompt"))
 	}
@@ -156,6 +182,7 @@ func handleCachePromptSet(cs *ClientState, args []string) Reply {
 	response := args[5]
 
 	var ttl time.Duration
+	var cost float64
 	for i := 6; i < len(args); i += 2 {
 		if i+1 >= len(args) {
 			return Err(ErrSyntaxMsg)
@@ -171,6 +198,12 @@ func handleCachePromptSet(cs *ClientState, args []string) Reply {
 			} else {
 				ttl = 0
 			}
+		case "COST":
+			c, err := parseCostArg(args[i+1])
+			if err != nil {
+				return Err(err.Error())
+			}
+			cost = c
 		default:
 			return Err(ErrSyntaxMsg)
 		}
@@ -180,7 +213,7 @@ func handleCachePromptSet(cs *ClientState, args []string) Reply {
 	if err != nil {
 		return Err(ErrInvalidJSONMsg)
 	}
-	cs.Deps.PromptCache.Set(key, response, ttl)
+	cs.Deps.PromptCache.Set(key, response, ttl, cost)
 	return OK
 }
 
@@ -200,11 +233,14 @@ func handleCachePromptGet(cs *ClientState, args []string) Reply {
 		return Err(ErrInvalidJSONMsg)
 	}
 
-	response, found := cs.Deps.PromptCache.Get(key)
+	response, found, cost := cs.Deps.PromptCache.Get(key)
 	if !found {
 		cs.Deps.Metrics.PromptCacheMiss()
 		return NullBulk()
 	}
 	cs.Deps.Metrics.PromptCacheHit()
+	if cost > 0 {
+		cs.Deps.Analytics.RecordCacheHitSavings("prompt", template, cost)
+	}
 	return BulkString(response)
 }

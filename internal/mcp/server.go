@@ -27,6 +27,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/SumitKumar-17/cache-pot/internal/analytics"
 	"github.com/SumitKumar-17/cache-pot/internal/memory"
 	"github.com/SumitKumar-17/cache-pot/internal/observability"
 	"github.com/SumitKumar-17/cache-pot/internal/semantic"
@@ -70,6 +71,7 @@ type Server struct {
 	vectorStore   *vector.Store
 	memoryStore   *memory.Store
 	metrics       *observability.Metrics
+	analytics     *analytics.Tracker
 
 	sdk *sdkmcp.Server
 }
@@ -81,8 +83,10 @@ type Server struct {
 // instances here instead would silently create a second, disconnected
 // memory space, defeating the entire point of "no adapter layer". metrics
 // should likewise be the same *observability.Metrics the RESP listener
-// records into, so /metrics and /stats reflect both protocols' traffic.
-func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store, metrics *observability.Metrics) *Server {
+// records into, so /metrics and /stats reflect both protocols' traffic;
+// tracker should likewise be the same *analytics.Tracker, so money-saved
+// and embedding-cost figures reflect both protocols' traffic too.
+func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCache, toolCache *toolcache.ToolCache, vectorStore *vector.Store, memoryStore *memory.Store, metrics *observability.Metrics, tracker *analytics.Tracker) *Server {
 	s := &Server{
 		semanticCache: semanticCache,
 		promptCache:   promptCache,
@@ -90,6 +94,7 @@ func New(semanticCache *semantic.SemanticCache, promptCache *semantic.PromptCach
 		vectorStore:   vectorStore,
 		memoryStore:   memoryStore,
 		metrics:       metrics,
+		analytics:     tracker,
 	}
 	s.sdk = sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
@@ -155,6 +160,11 @@ type CacheSemanticSetInput struct {
 	Model      string `json:"model,omitempty" jsonschema:"model-name partition; defaults to \"default\" if omitted or empty"`
 	Temp       string `json:"temp,omitempty" jsonschema:"temperature partition, as a decimal string; defaults to \"0\" if omitted or empty"`
 	TTLSeconds int    `json:"ttl_seconds,omitempty" jsonschema:"entry lifetime in seconds; omitted or <=0 means the entry never expires"`
+	// Cost is the optional, caller-reported dollar cost of originally
+	// producing Response (e.g. the LLM completion cost the caller paid).
+	// Omitted or <= 0 means "unknown/not reported" -- a later hit will
+	// never record fabricated money-saved.
+	Cost float64 `json:"cost,omitempty" jsonschema:"optional dollar cost of originally producing this response, used to track money saved on future cache hits; omitted or <=0 means unknown/not reported"`
 }
 
 // CacheSemanticSetOutput is the output for cache_semantic_set.
@@ -174,8 +184,11 @@ func (s *Server) cacheSemanticSet(ctx context.Context, _ *sdkmcp.CallToolRequest
 	} else if _, err := strconv.ParseFloat(temp, 64); err != nil {
 		return nil, CacheSemanticSetOutput{}, fmt.Errorf("mcp: temp %q is not a valid float", temp)
 	}
+	if in.Cost < 0 {
+		return nil, CacheSemanticSetOutput{}, fmt.Errorf("mcp: cost %v must be non-negative", in.Cost)
+	}
 
-	if err := s.semanticCache.Set(ctx, in.Prompt, model, temp, in.Response, ttlFromSeconds(in.TTLSeconds)); err != nil {
+	if err := s.semanticCache.Set(ctx, in.Prompt, model, temp, in.Response, ttlFromSeconds(in.TTLSeconds), in.Cost); err != nil {
 		return nil, CacheSemanticSetOutput{}, err
 	}
 	return nil, CacheSemanticSetOutput{OK: true}, nil
@@ -218,12 +231,15 @@ func (s *Server) cacheSemanticGet(ctx context.Context, _ *sdkmcp.CallToolRequest
 		threshold = *in.Threshold
 	}
 
-	response, found, err := s.semanticCache.Get(ctx, in.Prompt, model, temp, threshold)
+	response, found, cost, err := s.semanticCache.Get(ctx, in.Prompt, model, temp, threshold)
 	if err != nil {
 		return nil, CacheSemanticGetOutput{}, err
 	}
 	if found {
 		s.metrics.SemanticCacheHit()
+		if cost > 0 {
+			s.analytics.RecordCacheHitSavings("semantic", in.Prompt, cost)
+		}
 	} else {
 		s.metrics.SemanticCacheMiss()
 	}
@@ -241,6 +257,8 @@ type CachePromptSetInput struct {
 	Model         string `json:"model" jsonschema:"model name this cached response is scoped to"`
 	Response      string `json:"response" jsonschema:"the LLM response to cache"`
 	TTLSeconds    int    `json:"ttl_seconds,omitempty" jsonschema:"entry lifetime in seconds; omitted or <=0 means the entry never expires"`
+	// Cost mirrors CacheSemanticSetInput.Cost -- see its doc comment.
+	Cost float64 `json:"cost,omitempty" jsonschema:"optional dollar cost of originally producing this response, used to track money saved on future cache hits; omitted or <=0 means unknown/not reported"`
 }
 
 // CachePromptSetOutput is the output for cache_prompt_set.
@@ -250,11 +268,14 @@ type CachePromptSetOutput struct {
 
 func (s *Server) cachePromptSet(_ context.Context, _ *sdkmcp.CallToolRequest, in CachePromptSetInput) (*sdkmcp.CallToolResult, CachePromptSetOutput, error) {
 	s.metrics.MCPCallRecorded("cache_prompt_set")
+	if in.Cost < 0 {
+		return nil, CachePromptSetOutput{}, fmt.Errorf("mcp: cost %v must be non-negative", in.Cost)
+	}
 	key, err := semantic.TemplateKey(in.Template, in.VariablesJSON, in.Model)
 	if err != nil {
 		return nil, CachePromptSetOutput{}, fmt.Errorf("mcp: invalid variables_json: %w", err)
 	}
-	s.promptCache.Set(key, in.Response, ttlFromSeconds(in.TTLSeconds))
+	s.promptCache.Set(key, in.Response, ttlFromSeconds(in.TTLSeconds), in.Cost)
 	return nil, CachePromptSetOutput{OK: true}, nil
 }
 
@@ -278,9 +299,12 @@ func (s *Server) cachePromptGet(_ context.Context, _ *sdkmcp.CallToolRequest, in
 	if err != nil {
 		return nil, CachePromptGetOutput{}, fmt.Errorf("mcp: invalid variables_json: %w", err)
 	}
-	response, found := s.promptCache.Get(key)
+	response, found, cost := s.promptCache.Get(key)
 	if found {
 		s.metrics.PromptCacheHit()
+		if cost > 0 {
+			s.analytics.RecordCacheHitSavings("prompt", in.Template, cost)
+		}
 	} else {
 		s.metrics.PromptCacheMiss()
 	}
