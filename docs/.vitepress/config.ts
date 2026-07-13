@@ -33,6 +33,7 @@ export default defineConfig({
           { text: "MCP Server", link: "/getting-started/mcp-server" },
           { text: "Observability", link: "/getting-started/observability" },
           { text: "LLM Completions", link: "/getting-started/completions" },
+          { text: "Workspaces & Multi-Tenancy", link: "/getting-started/workspaces" },
         ],
       },
       {
@@ -52,7 +53,7 @@ export default defineConfig({
           { text: "Vector Search", link: "/commands/vector" },
           { text: "Agent Memory", link: "/commands/memory" },
           { text: "Consolidation & Knowledge Graph", link: "/commands/graph" },
-          { text: "Versioning (Planned)", link: "/commands/versioning" },
+          { text: "Versioning", link: "/commands/versioning" },
         ],
       },
       {

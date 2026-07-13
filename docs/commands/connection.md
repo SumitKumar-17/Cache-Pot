@@ -22,15 +22,17 @@ and basic introspection for a client connection.
 ## Notes
 
 - `SELECT` exists for client-library compatibility, but Cache-Pot has a
-  single logical database (`0`) in Phase 1 — there's no `SELECT 1`,
-  `SELECT 2`, etc. yet. Multiple isolated keyspaces arrive with Phase 7's
-  multi-tenancy work (see the [roadmap](/roadmap/)), scoped as workspaces
-  rather than numbered databases.
+  single logical database (`0`) — there's no `SELECT 1`, `SELECT 2`, etc.
+  Isolated keyspaces are scoped as **workspaces**, not numbered databases —
+  see [Workspaces & Multi-Tenancy](/getting-started/workspaces).
 - `HELLO` only negotiates RESP2. Clients requesting RESP3 get a clean
   rejection rather than a silently-broken RESP3 session — see [Redis
   compatibility](/architecture/redis-compatibility).
-- `AUTH` is only required if the server was started with `--password` /
-  `CACHEPOT_PASSWORD` set — see [Configuration](/getting-started/configuration).
+- `AUTH` is required if the server was started with `--password` /
+  `CACHEPOT_PASSWORD`, or with `--workspace-credentials` (in which case the
+  password also determines which workspace the connection is authorized
+  for) — see [Configuration](/getting-started/configuration) and
+  [Workspaces & Multi-Tenancy](/getting-started/workspaces).
 
 ## Example
 

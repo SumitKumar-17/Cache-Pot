@@ -13,6 +13,7 @@ for semantic search. See [MCP Server](/getting-started/mcp-server) for the equiv
 | `MEMORY.SEARCH` | Semantic search over a workspace's memories, across all agents unless filtered |
 | `AGENT.REMEMBER` | High-level helper to store a memory from raw content |
 | `AGENT.RECALL` | High-level helper to recall only this agent's own memories |
+| `MEMORY.HISTORY` | Fetch a memory item's full version history, oldest first |
 
 This is where Cache-Pot becomes an actual memory engine rather than a cache: a real
 memory domain layer with short-term, long-term, episodic, and semantic memory kinds,
@@ -26,9 +27,8 @@ MEMORY.PUT <agent_id> <content> [ID <id>] [WORKSPACE <workspace>] [KIND short_te
 
 - `WORKSPACE` defaults to `default`, `KIND` defaults to `long_term`.
 - `ID`: omit to generate a new memory id (returned as a bulk string); pass one to
-  **upsert** that exact memory — its `version` is bumped, replacing the previous
-  content/embedding. Full version history isn't retrievable yet (that's
-  [Phase 7](/roadmap/)'s `MEMORY.HISTORY`) — only the current version is kept.
+  **upsert** that exact memory — its `version` is bumped, and the previous version is
+  kept, retrievable via [`MEMORY.HISTORY`](/commands/versioning) below.
 - `METADATA` is a JSON object of arbitrary key/value metadata; invalid JSON is a RESP
   error.
 - Content is embedded via the server's [configured embedding provider](/getting-started/configuration)
@@ -94,6 +94,15 @@ workspace-wide search.
 redis-cli -p 6380 AGENT.RECALL alice "what languages does the user like?"
 # only alice's own memory — bob's is never returned here
 ```
+
+## MEMORY.HISTORY
+
+Full version history — see the dedicated [Versioning](/commands/versioning) page for
+`MEMORY.HISTORY <workspace> <id> [LIMIT <n>]`'s exact syntax and behavior.
+
+Every command on this page that takes an explicit `workspace` (or defaults it via
+`WORKSPACE`) is subject to [workspace authorization](/getting-started/workspaces) —
+unrestricted by default, enforced once `--workspace-credentials` is configured.
 
 See [`internal/memory`](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/memory)
 for the implementation.

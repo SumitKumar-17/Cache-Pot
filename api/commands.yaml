@@ -491,10 +491,12 @@
   status: real
   summary: Find nodes related to a given node in the knowledge graph (BFS, undirected)
 
-# --- Phase 7: versioning + multi-tenancy (status: planned) ----------------
+# --- Phase 7: versioning + multi-tenancy (status: real) -------------------
+# Multi-tenancy (--workspace-credentials, per-workspace AUTH) has no RESP
+# commands of its own — see docs/getting-started/workspaces.md.
 
 - name: MEMORY.HISTORY
   category: versioning
   phase: 7
-  status: planned
-  summary: Fetch the version history of a memory item
+  status: real
+  summary: Fetch the full version history of a memory item, oldest first

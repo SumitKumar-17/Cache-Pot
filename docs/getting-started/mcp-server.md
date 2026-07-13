@@ -1,6 +1,6 @@
 # MCP Server
 
-::: tip Phases 3-6 — real
+::: tip Phases 3-7 — real
 Cache-Pot runs a native MCP (Model Context Protocol) server alongside its RESP
 listener, sharing the exact same in-memory state — no adapter layer.
 :::
@@ -44,6 +44,7 @@ http://<host>:6381/
 | `consolidate` | `internal/consolidate.Consolidator` | `SUMMARY.CREATE` |
 | `extract_entities` | `internal/graph.Store` | `GRAPH.EXTRACT` (always `[0, 0]` with the mock completion provider — see [LLM completions](/getting-started/completions)) |
 | `find_related` | `internal/graph.Store` | `GRAPH.RELATED` |
+| `memory_history` | `internal/memory.Store` | `MEMORY.HISTORY` |
 
 Each tool's defaults (model, temperature, similarity threshold, memory kind, etc.)
 mirror its RESP command counterpart exactly — see the [command reference](/commands/)
@@ -53,8 +54,17 @@ for those defaults, and each tool's own MCP schema/description for its exact fie
 The original vision also described a generic `search` MCP tool (cross-memory search,
 not scoped to one agent). It's available as `MEMORY.SEARCH` over RESP but isn't yet
 exposed as its own MCP tool (only the always-agent-scoped `recall` is, for now).
-`consolidate`/`extract_entities`/`find_related` — previously the last gap — are real
-as of Phase 6.
+`consolidate`/`extract_entities`/`find_related`/`memory_history` are all real now.
+:::
+
+::: warning No authentication or workspace enforcement
+Every tool above calls its shared store directly, bypassing RESP's `ClientState`
+entirely — there is no `AUTH` concept for MCP connections, and none of Phase 7's
+[workspace authorization](/getting-started/workspaces) applies here. A tool call can
+read/write any workspace regardless of `--workspace-credentials`. If you're relying on
+workspace isolation for real multi-tenancy, don't expose the MCP port to untrusted
+callers — this is an honest, currently-unaddressed gap, not something quietly worked
+around.
 :::
 
 ## Example
@@ -79,6 +89,9 @@ call consolidate { agent_id: "research-bot" }
 
 call extract_entities { workspace: "default", memory_id: "mem-1" }
 call find_related      { workspace: "default", node_id: "redis" }
+
+call memory_history { workspace: "default", id: "mem-1" }
+# -> { versions: [{ version: 1, content: "..." }, { version: 2, content: "..." }] }
 ```
 
 See [`internal/mcp`](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/mcp)

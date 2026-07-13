@@ -95,6 +95,6 @@
 | `SUMMARY.CREATE` | consolidation | 6 | ✅ Real | Non-destructively dedup and LLM-summarize an agent's memories into one long-term memory |
 | `GRAPH.EXTRACT` | knowledge-graph | 6 | ✅ Real | LLM-extract entities/relationships from a memory into the knowledge graph |
 | `GRAPH.RELATED` | knowledge-graph | 6 | ✅ Real | Find nodes related to a given node in the knowledge graph (BFS, undirected) |
-| `MEMORY.HISTORY` | versioning | 7 | 🔶 Planned | Fetch the version history of a memory item |
+| `MEMORY.HISTORY` | versioning | 7 | ✅ Real | Fetch the full version history of a memory item, oldest first |
 
-*93 commands total: 92 real, 1 planned. Generated from `api/commands.yaml`.*
+*93 commands total: 93 real, 0 planned. Generated from `api/commands.yaml`.*

@@ -5,37 +5,31 @@
 ```
 cmd/cachepotd/       server entrypoint: parses flags/env into server.Config, runs the server
 internal/
-  server/            wires storage, auth, observability, and the RESP layer into a runnable process
-    resp/            RESP2 protocol (encode/decode), command dispatch, Phase 1 command handlers
+  server/            wires storage, auth, observability, and the RESP + MCP layers into a runnable process
+    resp/            RESP2 protocol (encode/decode), command dispatch, all command handlers
   storage/           the Engine interface — the seam between RESP handlers and any data-structure store
-    memstore/        Phase 1's implementation of Engine: a sharded in-memory map
+    memstore/        the implementation of Engine: a sharded in-memory map, keys namespaced by workspace
     ttl/             active (background) expiry reaper for memstore
-  auth/               password-based AUTH gating (Phase 1: single shared password)
-  observability/      structured logging + metrics
-  tenancy/            workspace/multi-tenancy scaffolding (Phase 7)
-  embed/              embedding-provider abstraction scaffolding (Phase 2)
-  semantic/           semantic/prompt cache scaffolding (Phase 2)
-  toolcache/          tool-result cache scaffolding (Phase 2)
-  vector/             vector index scaffolding (Phase 3)
-  mcp/                native MCP server scaffolding (Phase 3)
-  memory/             agent memory domain scaffolding (Phase 4)
-  eviction/           eviction policy scaffolding (LRU today, pluggable scoring in Phase 5)
-  analytics/          cost/usage analytics scaffolding (Phase 5)
-  consolidate/        memory consolidation scaffolding (Phase 6a)
-  graph/              knowledge graph scaffolding (Phase 6b)
+  auth/               AUTH gating: single shared password, or real per-workspace credentials (Phase 7)
+  observability/      structured logging + metrics (/metrics, /stats, /dashboard)
+  embed/              embedding-provider abstraction: mock + OpenAI (Phase 2)
+  semantic/           semantic/prompt cache: CACHE.SEMANTIC, CACHE.PROMPT (Phase 2)
+  toolcache/          tool-result cache: TOOL.CACHE (Phase 2)
+  vector/             native flat vector index: VECTOR.UPSERT/SEARCH/DELETE (Phase 3)
+  mcp/                native MCP server, sharing the same instances as resp.Deps (Phase 3)
+  memory/             agent memory domain: MEMORY.*/AGENT.*, version history (Phases 4, 7)
+  eviction/           eviction policies: LRU, Weighted, consumed by memstore's --max-entries bound (Phase 5)
+  analytics/          cost/usage analytics: embedding/completion $ cost tracking (Phase 5)
+  llm/                text-generation abstraction: CompletionProvider, mock + OpenAI (Phase 6)
+  consolidate/        memory consolidation: SUMMARY.CREATE (Phase 6a)
+  graph/              knowledge graph: GRAPH.EXTRACT/RELATED (Phase 6b)
 api/commands.yaml     authoritative command list across all 7 phases (source of truth for docs/commands)
 test/                 integration tests
 ```
 
-::: info
-Packages listed above with "scaffolding" exist as Go packages/files in the
-tree today, but implement Phase 2+ features that are **not wired into the
-running server** yet. Only `cmd/cachepotd`, `internal/server` (including
-`internal/server/resp`), `internal/storage` (including `memstore` and
-`ttl`), `internal/auth`, and `internal/observability` are exercised by a
-running Cache-Pot process today. See the [roadmap](/roadmap/) for what
-activates each of the others.
-:::
+All seven phases are wired into the running server today — every package above is
+exercised by a real running Cache-Pot process, not just present in the tree. See the
+[roadmap](/roadmap/) for what each phase added.
 
 ## The seam: `storage.Engine`
 
@@ -58,23 +52,25 @@ type Engine interface {
 }
 ```
 
-Phase 1 ships exactly one implementation — `internal/storage/memstore.Store`
-— but the interface is deliberately designed so later phases (a
-tiered/remote store, a store backed by persistence, etc.) can plug in an
-alternate `Engine`, or wrap the existing one with additional behavior,
-without touching the command dispatch layer in `internal/server/resp`.
+There's exactly one implementation — `internal/storage/memstore.Store` — but
+the interface is deliberately designed so a future store (a tiered/remote
+store, a store backed by persistence, etc.) can plug in an alternate
+`Engine`, or wrap the existing one with additional behavior, without
+touching the command dispatch layer in `internal/server/resp`.
 
 ### The `workspace` parameter
 
-Every `Engine` method takes a `workspace string` as its first parameter,
-even though Phase 1 only ever passes a single constant value (`"default"`).
-This is deliberate, forward-looking design: Phase 7 introduces multi-tenancy
-(`internal/tenancy`), where each tenant/agent gets an isolated keyspace — a
-"workspace." Threading the parameter through every call site now, even
-though it's unused for routing today, means Phase 7 can implement
-per-workspace isolation inside the storage layer (e.g. namespacing shards or
-maps per workspace) without changing a single call site in the RESP
-handlers.
+Every `Engine` method takes a `workspace string` as its first parameter, and
+`memstore` namespaces every key by `(workspace, key)` internally (see
+`memstore.nsKey`) — this has been real routing since Phase 1, not just an
+inert placeholder. Phase 7 built real per-workspace **authorization** on top
+of it: `--workspace-credentials` configures `workspace:password` pairs, and
+`internal/auth`/`ClientState.authorizedForWorkspace` reject a command whose
+workspace argument doesn't match the connection's authenticated workspace.
+See [Workspaces & Multi-Tenancy](/getting-started/workspaces) for the full
+behavior — including what's *not* covered (`CACHE.SEMANTIC`/`CACHE.PROMPT`/
+`TOOL.CACHE` remain global caches, and the MCP server has no auth layer at
+all).
 
 ## Request flow
 

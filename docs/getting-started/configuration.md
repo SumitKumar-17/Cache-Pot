@@ -19,6 +19,7 @@ hard-coded) value.
 | `--eviction-policy` | `CACHEPOT_EVICTION_POLICY` | `lru` | Eviction policy used once `--max-entries` is exceeded: `lru` or `weighted`; any other value fails at startup |
 | `--completion-provider` | `CACHEPOT_COMPLETION_PROVIDER` | `mock` | Text-generation provider backing `SUMMARY.CREATE`/`GRAPH.EXTRACT`: `mock` (no real generation — see [LLM Completions](/getting-started/completions)) or `openai` |
 | `--openai-completion-model` | `OPENAI_COMPLETION_MODEL` | `gpt-4o-mini` | Chat completion model, when `--completion-provider openai` |
+| `--workspace-credentials` | `CACHEPOT_WORKSPACE_CREDENTIALS` | *(empty — no per-workspace auth)* | Comma-separated `workspace:password` pairs enabling real, enforced [workspace isolation](/getting-started/workspaces); mutually exclusive with `--password` (startup error if both are set) |
 
 ## Loading config from a `.env` file
 
@@ -80,9 +81,9 @@ export CACHEPOT_PORT=6380
   are Phase 5 additions (see [Observability](/getting-started/observability));
   `--completion-provider`/`--openai-completion-model` are Phase 6 additions for
   [`SUMMARY.CREATE`/`GRAPH.EXTRACT`](/commands/graph) (see
-  [LLM Completions](/getting-started/completions)). There is no config file yet, and
-  no per-workspace configuration (that's Phase 7's multi-tenancy work; see the
-  [roadmap](/roadmap/)).
+  [LLM Completions](/getting-started/completions)); `--workspace-credentials` is a
+  Phase 7 addition for real [workspace isolation](/getting-started/workspaces). There
+  is no config file yet.
 - `CACHE.PROMPT` and `TOOL.CACHE` don't use an embedding provider — they're
   exact-match caches, so `--embed-provider` only affects `CACHE.SEMANTIC`.
 - `--openai-completion-model` reuses the *existing* `--openai-api-key`/
