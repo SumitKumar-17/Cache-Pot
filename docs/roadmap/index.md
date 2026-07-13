@@ -89,20 +89,32 @@ See the [agent memory commands](/commands/memory) page.
 
 See the [Observability](/getting-started/observability) page.
 
-## Phase 6 — Consolidation & Knowledge Graph *(planned — largest phase)*
+## Phase 6 — Consolidation & Knowledge Graph ✅ (largest phase)
 
-This phase is split into two sub-milestones because it is genuinely the
-biggest, most research-adjacent piece of work in the roadmap —
+This was the biggest, most research-adjacent piece of work in the roadmap —
 entity/relationship extraction quality and consolidation judgment calls are
-not a weekend feature.
+genuinely not a weekend feature. Both halves are real now, both built on a
+brand-new capability this phase introduced: `internal/llm.CompletionProvider`
+— [LLM completions](/getting-started/completions), Cache-Pot's first
+text-*generation* provider (everything before Phase 6 only ever produced
+embeddings).
 
-- **6a — Consolidation:** nightly dedup of near-duplicate memories via
-  vector similarity, summarization of episodic-memory clusters into
-  long-term memory
-- **6b — Knowledge Graph:** entity/relationship extraction from memory
-  content, graph storage, `GRAPH.RELATED` relationship queries
+- **6a — Consolidation (`SUMMARY.CREATE`):** dedup of near-duplicate memories
+  via vector similarity (non-destructive by design — nothing is ever deleted
+  from the store, only excluded from the summarization input), and real
+  LLM summarization of the deduplicated set into a new long-term memory.
+  **Not automatic/nightly** — this is an on-demand command; running it on a
+  schedule yourself (cron, a sidecar) is how to get nightly-style behavior
+  today.
+- **6b — Knowledge Graph (`GRAPH.EXTRACT`/`GRAPH.RELATED`):** real
+  entity/relationship extraction from memory content via the completion
+  provider, in-memory graph storage with source-memory provenance edges, and
+  breadth-first relationship queries. **Quality depends entirely on the
+  configured completion provider** — the dependency-free `mock` provider
+  honestly extracts zero entities/relations (verified, not a bug); real
+  extraction needs `--completion-provider openai`.
 
-See the [knowledge graph commands](/commands/graph) page.
+See the [Consolidation & Knowledge Graph commands](/commands/graph) page.
 
 ## Phase 7 — Multi-Tenancy & Versioning Hardening *(planned — cross-cutting)*
 

@@ -17,6 +17,8 @@ hard-coded) value.
 | `--mcp-port` | `CACHEPOT_MCP_PORT` | `6381` | TCP port for the native [MCP server](/getting-started/mcp-server); `0` disables it. Also serves `/metrics`, `/stats`, and `/dashboard` (see [Observability](/getting-started/observability)) |
 | `--max-entries` | `CACHEPOT_MAX_ENTRIES` | `0` | Maximum total live keys, server-wide, before [eviction](/getting-started/observability#eviction) kicks in; `0` means unlimited |
 | `--eviction-policy` | `CACHEPOT_EVICTION_POLICY` | `lru` | Eviction policy used once `--max-entries` is exceeded: `lru` or `weighted`; any other value fails at startup |
+| `--completion-provider` | `CACHEPOT_COMPLETION_PROVIDER` | `mock` | Text-generation provider backing `SUMMARY.CREATE`/`GRAPH.EXTRACT`: `mock` (no real generation — see [LLM Completions](/getting-started/completions)) or `openai` |
+| `--openai-completion-model` | `OPENAI_COMPLETION_MODEL` | `gpt-4o-mini` | Chat completion model, when `--completion-provider openai` |
 
 ## Loading config from a `.env` file
 
@@ -75,8 +77,14 @@ export CACHEPOT_PORT=6380
   `--embed-provider`/`--openai-api-key`/`--openai-api-base` are Phase 2 additions for
   [`CACHE.SEMANTIC`](/commands/semantic-cache); `--mcp-port` is a Phase 3 addition for
   the [MCP server](/getting-started/mcp-server); `--max-entries`/`--eviction-policy`
-  are Phase 5 additions (see [Observability](/getting-started/observability)). There is
-  no config file yet, and no per-workspace configuration (that's Phase 7's
-  multi-tenancy work; see the [roadmap](/roadmap/)).
+  are Phase 5 additions (see [Observability](/getting-started/observability));
+  `--completion-provider`/`--openai-completion-model` are Phase 6 additions for
+  [`SUMMARY.CREATE`/`GRAPH.EXTRACT`](/commands/graph) (see
+  [LLM Completions](/getting-started/completions)). There is no config file yet, and
+  no per-workspace configuration (that's Phase 7's multi-tenancy work; see the
+  [roadmap](/roadmap/)).
 - `CACHE.PROMPT` and `TOOL.CACHE` don't use an embedding provider — they're
   exact-match caches, so `--embed-provider` only affects `CACHE.SEMANTIC`.
+- `--openai-completion-model` reuses the *existing* `--openai-api-key`/
+  `--openai-api-base` — one OpenAI account/endpoint serves both embeddings and
+  completions, no duplicate key/base flags.

@@ -1,6 +1,6 @@
 # MCP Server
 
-::: tip Phases 3-4 — real
+::: tip Phases 3-6 — real
 Cache-Pot runs a native MCP (Model Context Protocol) server alongside its RESP
 listener, sharing the exact same in-memory state — no adapter layer.
 :::
@@ -41,19 +41,20 @@ http://<host>:6381/
 | `delete_vector` | `internal/vector.Store` | `VECTOR.DELETE` |
 | `remember` | `internal/memory.Store` | `AGENT.REMEMBER` |
 | `recall` | `internal/memory.Store` | `AGENT.RECALL` (always scoped to the calling `agent_id`, same no-cross-agent-leak guarantee) |
+| `consolidate` | `internal/consolidate.Consolidator` | `SUMMARY.CREATE` |
+| `extract_entities` | `internal/graph.Store` | `GRAPH.EXTRACT` (always `[0, 0]` with the mock completion provider — see [LLM completions](/getting-started/completions)) |
+| `find_related` | `internal/graph.Store` | `GRAPH.RELATED` |
 
 Each tool's defaults (model, temperature, similarity threshold, memory kind, etc.)
 mirror its RESP command counterpart exactly — see the [command reference](/commands/)
 for those defaults, and each tool's own MCP schema/description for its exact fields.
 
 ::: warning What's still NOT exposed
-The original vision also described a generic `search` (cross-memory search, not
-scoped to one agent) and a `summarize` MCP tool. `search` is available as
-`MEMORY.SEARCH` over RESP but isn't yet exposed as its own MCP tool (only the
-always-agent-scoped `recall` is, for now). `summarize` maps to
-[Phase 6](/roadmap/) (consolidation), which isn't implemented yet —
-`internal/consolidate` is still an empty skeleton. Exposing `summarize` now would mean
-an MCP client calling it and getting something that isn't real consolidation.
+The original vision also described a generic `search` MCP tool (cross-memory search,
+not scoped to one agent). It's available as `MEMORY.SEARCH` over RESP but isn't yet
+exposed as its own MCP tool (only the always-agent-scoped `recall` is, for now).
+`consolidate`/`extract_entities`/`find_related` — previously the last gap — are real
+as of Phase 6.
 :::
 
 ## Example
@@ -72,6 +73,12 @@ call cache_semantic_get { prompt: "What is Kubernetes?" }
 call remember { agent_id: "research-bot", content: "User prefers concise, bullet-point summaries" }
 call recall   { agent_id: "research-bot", query: "how does this user like answers formatted?" }
 # -> [{ id: "...", score: 0.9x }]
+
+call consolidate { agent_id: "research-bot" }
+# -> { summary_id: "...", source_count: 5, deduped_count: 3 }
+
+call extract_entities { workspace: "default", memory_id: "mem-1" }
+call find_related      { workspace: "default", node_id: "redis" }
 ```
 
 See [`internal/mcp`](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/mcp)

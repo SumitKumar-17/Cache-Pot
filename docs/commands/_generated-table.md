@@ -91,8 +91,9 @@
 | `MEMORY.SEARCH` | agent-memory | 4 | ✅ Real | Semantic search over a workspace's memories, across all agents unless AGENT-filtered |
 | `AGENT.REMEMBER` | agent-memory | 4 | ✅ Real | High-level helper to store an agent memory from raw content |
 | `AGENT.RECALL` | agent-memory | 4 | ✅ Real | High-level helper to recall only this agent's own memories relevant to a query |
-| `SUMMARY.CREATE` | consolidation | 6 | 🔶 Planned | Consolidate accumulated episodic memories into a summary |
-| `GRAPH.RELATED` | knowledge-graph | 6 | 🔶 Planned | Find entities/memories related to a given node in the knowledge graph |
+| `SUMMARY.CREATE` | consolidation | 6 | ✅ Real | Non-destructively dedup and LLM-summarize an agent's memories into one long-term memory |
+| `GRAPH.EXTRACT` | knowledge-graph | 6 | ✅ Real | LLM-extract entities/relationships from a memory into the knowledge graph |
+| `GRAPH.RELATED` | knowledge-graph | 6 | ✅ Real | Find nodes related to a given node in the knowledge graph (BFS, undirected) |
 | `MEMORY.HISTORY` | versioning | 7 | 🔶 Planned | Fetch the version history of a memory item |
 
-*91 commands total: 88 real, 3 planned. Generated from `api/commands.yaml`.*
+*92 commands total: 91 real, 1 planned. Generated from `api/commands.yaml`.*

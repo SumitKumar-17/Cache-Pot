@@ -1,15 +1,16 @@
 # Contributing
 
-Cache-Pot is early — Phases 1-5 (see [ROADMAP.md](ROADMAP.md)) are done: the
+Cache-Pot is early — Phases 1-6 (see [ROADMAP.md](ROADMAP.md)) are done: the
 Redis-compatible core, semantic/prompt/tool caching, a native vector store, shared
-agent memory, a native MCP server, and observability/cost analytics/eviction.
-Contributions are welcome, especially:
+agent memory, a native MCP server, observability/cost analytics/eviction, and real
+LLM-backed consolidation + a knowledge graph. Contributions are welcome, especially:
 
 - Redis error-string compatibility fixes and Phase 1 command coverage gaps
 - Test coverage (unit tests per command, integration tests against real clients)
 - Documentation fixes in `docs/`
-- Phase 6 groundwork (consolidation + knowledge graph — see the roadmap; the largest,
-  most research-adjacent phase, per the roadmap's own honesty flag)
+- Real-world evaluation of `GRAPH.EXTRACT`/`SUMMARY.CREATE` output quality against
+  `--completion-provider openai` — prompt tuning, extraction schema improvements
+- Phase 7 groundwork (memory versioning + multi-tenancy — see the roadmap)
 
 ## Development
 

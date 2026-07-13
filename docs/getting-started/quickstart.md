@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks through connecting to a running Cache-Pot server and exercising
-the Phase 1-5 commands that are real today. See
+the Phase 1-6 commands that are real today. See
 [Installation](/getting-started/installation) if you don't have a server
 running yet.
 
@@ -79,7 +79,7 @@ Any other RESP2 client (redis-py, ioredis, jedis, node-redis, etc.) works the
 same way — point it at Cache-Pot's host/port instead of Redis's.
 
 See the [command reference](/commands/) for the full list of what's
-implemented in Phase 1-5.
+implemented in Phase 1-6.
 
 ## Semantic and prompt caching (Phase 2)
 
@@ -153,8 +153,24 @@ $0.015 of "money saved" — see the [Observability](/getting-started/observabili
 for the full picture, including how to bound the keyspace with `--max-entries` and
 `--eviction-policy`.
 
-::: info Planned — Phase 6
-Automatic nightly consolidation (deduping and summarizing accumulated memories into a
-knowledge graph) isn't built yet — today's memories accumulate as-is. See the
-[roadmap](/roadmap/).
+## Consolidation and the knowledge graph (Phase 6)
+
+```bash
+redis-cli -p 6380 SUMMARY.CREATE research-bot
+# -> a new long_term memory summarizing (and non-destructively deduping) research-bot's episodic memories
+
+redis-cli -p 6380 GRAPH.EXTRACT default mem-1
+# -> [entities_added, relations_added] -- always [0, 0] with the default mock completion provider
+redis-cli -p 6380 GRAPH.RELATED default redis
+```
+
+Both are real, but their quality depends entirely on the configured
+[completion provider](/getting-started/completions) — the default `mock` provider does
+no real language understanding, so `GRAPH.EXTRACT` against it honestly extracts
+nothing. Use `--completion-provider openai` for genuine summarization/extraction. See
+the [Consolidation & Knowledge Graph commands](/commands/graph) page.
+
+::: info Planned — Phase 7
+Full memory version history (`MEMORY.HISTORY`) and multi-tenancy aren't built yet. See
+the [roadmap](/roadmap/).
 :::

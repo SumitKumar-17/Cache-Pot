@@ -468,18 +468,23 @@
   status: real
   summary: High-level helper to recall only this agent's own memories relevant to a query
 
-# --- Phase 6: consolidation + knowledge graph (status: planned) -----------
+# --- Phase 6: consolidation + knowledge graph (status: real) --------------
 
 - name: SUMMARY.CREATE
   category: consolidation
   phase: 6
-  status: planned
-  summary: Consolidate accumulated episodic memories into a summary
+  status: real
+  summary: Non-destructively dedup and LLM-summarize an agent's memories into one long-term memory
+- name: GRAPH.EXTRACT
+  category: knowledge-graph
+  phase: 6
+  status: real
+  summary: LLM-extract entities/relationships from a memory into the knowledge graph
 - name: GRAPH.RELATED
   category: knowledge-graph
   phase: 6
-  status: planned
-  summary: Find entities/memories related to a given node in the knowledge graph
+  status: real
+  summary: Find nodes related to a given node in the knowledge graph (BFS, undirected)
 
 # --- Phase 7: versioning + multi-tenancy (status: planned) ----------------
 

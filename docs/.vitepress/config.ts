@@ -28,6 +28,7 @@ export default defineConfig({
           { text: "Configuration", link: "/getting-started/configuration" },
           { text: "MCP Server", link: "/getting-started/mcp-server" },
           { text: "Observability", link: "/getting-started/observability" },
+          { text: "LLM Completions", link: "/getting-started/completions" },
         ],
       },
       {
@@ -46,7 +47,7 @@ export default defineConfig({
           { text: "Tool Cache", link: "/commands/tool-cache" },
           { text: "Vector Search", link: "/commands/vector" },
           { text: "Agent Memory", link: "/commands/memory" },
-          { text: "Knowledge Graph (Planned)", link: "/commands/graph" },
+          { text: "Consolidation & Knowledge Graph", link: "/commands/graph" },
           { text: "Versioning (Planned)", link: "/commands/versioning" },
         ],
       },
