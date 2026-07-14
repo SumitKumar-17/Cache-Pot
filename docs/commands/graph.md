@@ -69,6 +69,40 @@ requires `--completion-provider openai` (see
 [configuration](/getting-started/configuration)).
 :::
 
+**Entity ids are lowercase, underscored, and stable — not the original display casing.**
+The completion prompt explicitly asks for ids like `redis`/`project_a` (see
+`internal/graph/extract.go`'s `extractSystemPrompt`), specifically so the same
+real-world entity mentioned two different ways (e.g. "Redis" and "the Redis cache")
+produces the same id both times. `GRAPH.RELATED` looks up by id, not by the original
+capitalization — querying with the capitalized display form is a common mistake and
+returns an empty result even though the entity really is in the graph.
+
+Real captured output below, run against `--completion-provider openai` (real API, real
+`gpt-4o-mini` extraction — GPT model output isn't deterministic, so exact counts/ids can
+vary slightly run to run, but this is one real, verified run, not a hypothetical):
+
+```bash
+redis-cli -p 6380 MEMORY.PUT bot "Kubernetes was originally created by Google and is now maintained by the Cloud Native Computing Foundation." ID graph-mem-1
+# "graph-mem-1"
+
+redis-cli -p 6380 GRAPH.EXTRACT default graph-mem-1
+# (integer) 3   -- entities_added
+# (integer) 2   -- relations_added
+
+redis-cli -p 6380 GRAPH.RELATED default Kubernetes
+# (empty array)   -- WRONG casing: the extracted id is lowercase "kubernetes", not "Kubernetes"
+
+redis-cli -p 6380 GRAPH.RELATED default kubernetes
+# 1) "cloud_native_computing_foundation"
+# 2) "memory:graph-mem-1"
+# 3) "google"
+
+redis-cli -p 6380 GRAPH.RELATED default memory:graph-mem-1
+# 1) "google"
+# 2) "cloud_native_computing_foundation"
+# 3) "kubernetes"
+```
+
 ## GRAPH.RELATED — query the knowledge graph
 
 ```

@@ -278,21 +278,26 @@ func TestRealOpenAIGraphExtractProducesRealEntities(t *testing.T) {
 		t.Fatal("GRAPH.EXTRACT with a real completion provider extracted 0 entities from a memory naming Kubernetes/Google/CNCF, want > 0")
 	}
 
-	related, err := rdb.Do(ctx, "GRAPH.RELATED", "default", "Kubernetes").StringSlice()
+	// Entity ids are lowercase/underscored by prompt design (see
+	// extractSystemPrompt's doc comment in internal/graph/extract.go), never
+	// the original display casing -- querying with the capitalized form is a
+	// real, documented gotcha (see docs/commands/graph.md), verified here
+	// directly: it must miss.
+	if related, err := rdb.Do(ctx, "GRAPH.RELATED", "default", "Kubernetes").StringSlice(); err != nil {
+		t.Fatalf("GRAPH.RELATED Kubernetes (capitalized): %v", err)
+	} else if len(related) != 0 {
+		t.Fatalf("GRAPH.RELATED Kubernetes (capitalized) = %v, want empty -- if this now returns results, extraction ids are no longer lowercase and docs/commands/graph.md needs updating", related)
+	}
+
+	// The provenance node ("memory:<id>") is always present regardless of
+	// wording, so it's the reliable way to reach whatever the extractor
+	// actually named its entities.
+	related, err := rdb.Do(ctx, "GRAPH.RELATED", "default", "memory:graph-mem-1").StringSlice()
 	if err != nil {
-		t.Fatalf("GRAPH.RELATED Kubernetes: %v", err)
+		t.Fatalf("GRAPH.RELATED memory:graph-mem-1: %v", err)
 	}
 	if len(related) == 0 {
-		// The extractor may not have used the exact string "Kubernetes" as
-		// the node id/label -- fall back to checking the provenance node
-		// instead, which is always id "memory:<id>" regardless of wording.
-		related, err = rdb.Do(ctx, "GRAPH.RELATED", "default", "memory:graph-mem-1").StringSlice()
-		if err != nil {
-			t.Fatalf("GRAPH.RELATED memory:graph-mem-1: %v", err)
-		}
-		if len(related) == 0 {
-			t.Fatal("GRAPH.RELATED found no related nodes from either the extracted entity name or the memory's own provenance node, want at least one")
-		}
+		t.Fatal("GRAPH.RELATED found no related nodes from the memory's own provenance node, want at least one")
 	}
 }
 
