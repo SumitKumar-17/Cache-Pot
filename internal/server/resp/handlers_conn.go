@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+// cachepotVersion is Cache-Pot's own release version (see ROADMAP.md),
+// reported by HELLO and INFO -- not a RESP protocol version. Update this
+// whenever a new version ships.
+const cachepotVersion = "0.7.0"
+
 // RegisterConn adds the connection/protocol-management commands: PING,
 // ECHO, SELECT, HELLO, AUTH, CLIENT, COMMAND, INFO, QUIT.
 func RegisterConn(r *Registry) {
@@ -99,7 +104,7 @@ func handleHello(cs *ClientState, args []string) Reply {
 
 	return ArraySlice([]Reply{
 		BulkString("server"), BulkString("cachepot"),
-		BulkString("version"), BulkString("0.1.0"),
+		BulkString("version"), BulkString(cachepotVersion),
 		BulkString("proto"), Int(2),
 		BulkString("id"), Int(1),
 		BulkString("mode"), BulkString("standalone"),
@@ -165,7 +170,7 @@ func handleInfo(cs *ClientState, args []string) Reply {
 	snap := cs.Deps.Metrics.Snapshot()
 	info := "# Server\r\n" +
 		"redis_version:7.0.0\r\n" +
-		"cachepot_version:0.1.0\r\n" +
+		"cachepot_version:" + cachepotVersion + "\r\n" +
 		"\r\n# Clients\r\n" +
 		fmt.Sprintf("connected_clients:%d\r\n", snap.ConnectionsActive) +
 		"\r\n# Stats\r\n" +

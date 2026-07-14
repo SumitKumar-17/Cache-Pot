@@ -80,8 +80,10 @@ const (
 	// 1" behavior.
 	defaultGraphDepth = 1
 
-	serverName    = "cachepot"
-	serverVersion = "0.3.0"
+	serverName = "cachepot"
+	// serverVersion is Cache-Pot's own release version (see ROADMAP.md), not
+	// an MCP protocol version -- update this whenever a new version ships.
+	serverVersion = "0.7.0"
 )
 
 // Server exposes Cache-Pot's caches, vector store, agent memory,
