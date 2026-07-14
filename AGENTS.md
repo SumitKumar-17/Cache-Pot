@@ -98,6 +98,15 @@ or similar instead of reusing the shared one, you've silently broken that guaran
   meaning, and are documented as such. When you build something on top of a provider,
   write the graceful-degradation path for the mock *and test it* — don't just assume
   the real provider will always be configured.
+- **Embed text via `embed.EmbedOne`, never `provider.Embed` directly.** A real
+  `embed.Provider` optionally implements `embed.UsageEmbedder` (real token/cost
+  reporting); `EmbedOne` type-asserts for it and uses the usage-reporting path when
+  available, falling back to plain `Embed` otherwise (e.g. the mock provider). Calling
+  `provider.Embed` directly compiles fine and produces correct embeddings, but silently
+  skips real cost/token tracking regardless of provider — this exact bug shipped in
+  `internal/semantic` and `internal/memory` until `test/integration/real_openai_test.go`
+  caught it against the real API (a mock-only test suite can't catch this, since the
+  mock has no real usage to report either way).
 - **Bounded sampling over full scans**, for anything that has to touch "all the keys":
   the TTL reaper, the `--max-entries` evictor, and the flat vector/memory search all
   intentionally sample or brute-force-scan within a bounded scope rather than

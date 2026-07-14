@@ -49,3 +49,25 @@ type TokenUsage struct {
 type UsageEmbedder interface {
 	EmbedBatchWithUsage(ctx context.Context, texts []string) ([][]float32, TokenUsage, error)
 }
+
+// EmbedOne embeds a single piece of text, preferring p's UsageEmbedder
+// capability (EmbedBatchWithUsage) over plain Embed when p implements it.
+// This is the one call site every caller of Provider should go through
+// instead of calling p.Embed directly: internal/observability's
+// InstrumentProvider wrapper only records real token/cost usage on
+// EmbedBatchWithUsage calls (see embed_instrument.go), so a caller that
+// calls Embed instead silently produces correct embeddings but never
+// reports real usage to /stats' cost-analytics section, even with a real
+// OpenAI provider configured. Providers without UsageEmbedder (the
+// dependency-free mock) fall back to plain Embed, since there's no real
+// usage to report either way.
+func EmbedOne(ctx context.Context, p Provider, text string) ([]float32, error) {
+	if up, ok := p.(UsageEmbedder); ok {
+		vecs, _, err := up.EmbedBatchWithUsage(ctx, []string{text})
+		if err != nil {
+			return nil, err
+		}
+		return vecs[0], nil
+	}
+	return p.Embed(ctx, text)
+}

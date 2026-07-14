@@ -88,7 +88,7 @@ func partitionKey(model, temp string) string {
 // caller-reported dollar cost of producing response; <= 0 means "unknown/
 // not reported" and Get will never report savings for this entry.
 func (c *SemanticCache) Set(ctx context.Context, prompt, model, temp, response string, ttl time.Duration, cost float64) error {
-	vec, err := c.provider.Embed(ctx, prompt)
+	vec, err := embed.EmbedOne(ctx, c.provider, prompt)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (c *SemanticCache) Set(ctx context.Context, prompt, model, temp, response s
 // from it themselves; internal/semantic deliberately doesn't import
 // internal/analytics.
 func (c *SemanticCache) Get(ctx context.Context, prompt, model, temp string, threshold float64) (response string, found bool, cost float64, err error) {
-	vec, err := c.provider.Embed(ctx, prompt)
+	vec, err := embed.EmbedOne(ctx, c.provider, prompt)
 	if err != nil {
 		return "", false, 0, err
 	}

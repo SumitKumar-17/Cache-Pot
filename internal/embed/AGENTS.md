@@ -20,6 +20,15 @@ in v0.2.0, one of the two earliest domain packages alongside `internal/semantic`
   usage number** — if a provider can't report real usage (the mock never can), don't
   type-assert and guess; treat its absence as "unknown." `internal/analytics` consumes
   this for real cost tracking.
+- `EmbedOne(ctx, provider, text)` is the function every caller embedding a single
+  string should use instead of `provider.Embed(ctx, text)` directly. It type-asserts for
+  `UsageEmbedder` and prefers `EmbedBatchWithUsage` when available, falling back to
+  plain `Embed` otherwise. Calling `Embed` directly compiles and produces correct
+  embeddings, but silently skips real cost/token tracking regardless of provider — this
+  exact bug shipped in `internal/semantic` and `internal/memory` until a real-API
+  integration test caught it (see `test/integration/real_openai_test.go` and
+  `test/integration/AGENTS.md`). A mock-only test can never catch this, since the mock
+  has no real usage to report either way.
 - `NewMock(dims)` (`mock.go`): deterministic, dependency-free, makes zero network calls.
   Same text always produces the same vector; different words produce dissimilar
   vectors (cosine < 0.5 for unrelated text); same words with different case/whitespace

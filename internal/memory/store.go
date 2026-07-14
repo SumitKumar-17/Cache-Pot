@@ -182,7 +182,7 @@ func (s *Store) Put(ctx context.Context, m Memory, ttl time.Duration) (string, e
 		return "", errors.New("memory: workspace is required")
 	}
 
-	vec, err := s.provider.Embed(ctx, m.Content)
+	vec, err := embed.EmbedOne(ctx, s.provider, m.Content)
 	if err != nil {
 		return "", err
 	}
@@ -310,7 +310,7 @@ func (s *Store) Get(ctx context.Context, workspaceID, id string) (Memory, bool, 
 
 // Search implements MemoryStore.Search.
 func (s *Store) Search(ctx context.Context, workspaceID, query string, opts SearchOptions) ([]SearchResult, error) {
-	vec, err := s.provider.Embed(ctx, query)
+	vec, err := embed.EmbedOne(ctx, s.provider, query)
 	if err != nil {
 		return nil, err
 	}
