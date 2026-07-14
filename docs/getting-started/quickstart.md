@@ -89,7 +89,7 @@ real embeddings.
 
 ```bash
 redis-cli -p 6380 CACHE.SEMANTIC SET "What is Kubernetes?" "K8s is a container orchestrator." MODEL gpt-4 COST 0.015
-redis-cli -p 6380 CACHE.SEMANTIC GET "what is k8s?" MODEL gpt-4
+redis-cli -p 6380 CACHE.SEMANTIC GET "what is kubernetes" MODEL gpt-4
 # "K8s is a container orchestrator."   (matched by meaning, not exact string; the hit
 #                                        also records $0.015 as money saved -- see below)
 
@@ -97,6 +97,12 @@ redis-cli -p 6380 TOOL.CACHE SET github.getIssue '{"repo":"cache-pot","issue":42
 redis-cli -p 6380 TOOL.CACHE GET github.getIssue '{"issue":42,"repo":"cache-pot"}'
 # '{"title":"..."}'   (key order in the JSON doesn't matter)
 ```
+
+The example above (same words, different case) scores high similarity under both the mock
+provider and real embeddings. A paraphrase using *different* words for the same concept is a
+harder case for any embedding model, mock or real, and the default `THRESHOLD` may need
+tuning — see the [semantic cache page](/commands/semantic-cache)'s "Tune THRESHOLD for real
+embeddings" warning before assuming a miss means something is broken.
 
 See the [semantic cache](/commands/semantic-cache) and
 [tool cache](/commands/tool-cache) pages for the full command syntax.
