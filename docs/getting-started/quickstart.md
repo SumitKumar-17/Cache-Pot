@@ -161,19 +161,55 @@ for the full picture, including how to bound the keyspace with `--max-entries` a
 
 ## Consolidation and the knowledge graph
 
+With the default `mock` completion provider (no API key, fully offline):
+
 ```bash
 redis-cli -p 6380 SUMMARY.CREATE research-bot
-# -> a new long_term memory summarizing (and non-destructively deduping) research-bot's episodic memories
+# "..."   -- a new long_term memory id, summarizing (and non-destructively deduping)
+#            research-bot's episodic memories; the mock provider's "summary" is just a
+#            deterministic echo of its input, not a real summary -- see below
 
 redis-cli -p 6380 GRAPH.EXTRACT default mem-1
-# -> [entities_added, relations_added] -- always [0, 0] with the default mock completion provider
+# 1) (integer) 0
+# 2) (integer) 0   -- always [0, 0] with the mock provider, honestly: it can't produce
+#                     the structured extraction the real thing needs
 redis-cli -p 6380 GRAPH.RELATED default redis
+# (empty array)
 ```
 
-Both are real, but their quality depends entirely on the configured
-[completion provider](/getting-started/completions) — the default `mock` provider does
-no real language understanding, so `GRAPH.EXTRACT` against it honestly extracts
-nothing. Use `--completion-provider openai` for genuine summarization/extraction. See
+Both commands are real, but their *quality* depends entirely on the configured
+[completion provider](/getting-started/completions). Here's the same flow with
+`--completion-provider openai` — real captured output, not a hypothetical:
+
+```bash
+redis-cli -p 6380 AGENT.REMEMBER research-bot "The user asked how Redis WATCH/MULTI/EXEC optimistic locking works." KIND episodic
+redis-cli -p 6380 AGENT.REMEMBER research-bot "The user followed up asking specifically what happens if a watched key changes before EXEC." KIND episodic
+
+redis-cli -p 6380 SUMMARY.CREATE research-bot
+# "a779a2677cd227ed05cc334b78ac8d4c"
+
+redis-cli -p 6380 MEMORY.GET default a779a2677cd227ed05cc334b78ac8d4c
+# ...
+# content: "The user inquired about the workings of Redis's optimistic locking mechanism,
+#           specifically the functions WATCH, MULTI, and EXEC, and later followed up on
+#           the implications of a watched key changing before the EXEC command is
+#           executed."
+# metadata: {"consolidated_from_kind":"episodic","deduped_count":"2","source_count":"2"}
+# ...
+
+redis-cli -p 6380 MEMORY.PUT bot "Redis WATCH marks a key to be monitored; if it changes before EXEC, the transaction aborts." ID mem-1
+redis-cli -p 6380 GRAPH.EXTRACT default mem-1
+# 1) (integer) 4
+# 2) (integer) 3
+
+redis-cli -p 6380 GRAPH.RELATED default redis
+# 1) "watch"
+# 2) "memory:mem-1"
+```
+
+Real completion-model output isn't deterministic — exact counts and wording will vary
+run to run — but real, non-trivial summarization and non-zero extraction from real
+content is verified, not just claimed. See
 the [Consolidation & Knowledge Graph commands](/commands/graph) page.
 
 ## Workspaces and memory versioning
