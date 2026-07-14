@@ -1,6 +1,6 @@
 # Consolidation & Knowledge Graph Commands
 
-::: tip Phase 6 — real
+::: tip v0.6.0 — real
 These commands work today. Their quality depends entirely on the configured
 [completion provider](/getting-started/completions) — see the honesty note below
 before relying on them for anything beyond the dependency-free `mock` provider's
@@ -13,11 +13,11 @@ plumbing-level testing.
 | `GRAPH.EXTRACT` | LLM-extract entities/relationships from a memory into the knowledge graph |
 | `GRAPH.RELATED` | Find nodes related to a given node in the knowledge graph |
 
-This is the largest phase in the roadmap — entity/relationship extraction quality and
-consolidation judgment calls are genuinely research-adjacent, not a weekend feature.
-It's split into two related capabilities, both real now, both built on
-[LLM completions](/getting-started/completions) — Cache-Pot's first text-*generation*
-capability (everything before Phase 6 only ever produced embeddings).
+This was the biggest, most research-adjacent piece of work in the whole build —
+entity/relationship extraction quality and consolidation judgment calls are genuinely
+not a weekend feature. It's split into two related capabilities, both real now, both
+built on [LLM completions](/getting-started/completions) — Cache-Pot's first
+text-*generation* capability (everything before v0.6.0 only ever produced embeddings).
 
 ## SUMMARY.CREATE — consolidation
 

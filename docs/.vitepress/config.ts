@@ -20,7 +20,7 @@ export default defineConfig({
       { text: "Getting Started", link: "/getting-started/installation" },
       { text: "Commands", link: "/commands/" },
       { text: "Architecture", link: "/architecture/overview" },
-      { text: "Roadmap", link: "/roadmap/" },
+      { text: "Release History", link: "/roadmap/" },
     ],
 
     sidebar: [
@@ -65,8 +65,8 @@ export default defineConfig({
         ],
       },
       {
-        text: "Roadmap",
-        items: [{ text: "7-Phase Roadmap", link: "/roadmap/" }],
+        text: "Release History",
+        items: [{ text: "v0.1.0 → v0.7.0", link: "/roadmap/" }],
       },
     ],
 

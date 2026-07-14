@@ -2,8 +2,8 @@
 
 Cache-Pot's adoption pitch is that it's a drop-in for RESP2 clients. This
 page is the honest, explicit accounting of what that does and doesn't mean
-**today**, in Phase 1. Nothing on this page describes planned work as if it
-already exists — see the [roadmap](/roadmap/) for what's planned instead.
+**today**. Nothing on this page describes planned work as if it already
+exists — see the [release history](/roadmap/) for what's actually shipped.
 
 ## What "Redis-compatible" means today
 
@@ -39,7 +39,7 @@ already exists — see the [roadmap](/roadmap/) for what's planned instead.
 - **Geo commands** (`GEOADD`/`GEOSEARCH`/etc.) — not implemented.
 - **Streams** (`XADD`/`XREAD`/etc.) — not implemented.
 - Multiple logical databases — `SELECT` exists for client-library
-  compatibility but only accepts database `0` in Phase 1.
+  compatibility but only accepts database `0`.
 
 If a client library or tool depends on any of the above, it will either fail
 outright or silently no-op depending on how that client handles an unknown
@@ -47,7 +47,7 @@ command — Cache-Pot does not attempt to fake support for any of these.
 
 ## Volatile, in-memory only
 
-Phase 1 storage (`internal/storage/memstore`) is **entirely in-memory**.
+Cache-Pot's storage (`internal/storage/memstore`) is **entirely in-memory**.
 There is no write-ahead log, no snapshotting, and no on-disk representation
 of any kind:
 
@@ -56,16 +56,17 @@ of any kind:
   empty store on the next start.
 - The `cachepot-data` volume declared in the shipped
   `docker-compose.yml` is a reserved no-op today — nothing is actually
-  persisted to it in Phase 1.
-- Do not point Phase 1 Cache-Pot at any workload where losing all cached/stored
+  persisted to it.
+- Do not point Cache-Pot at any workload where losing all cached/stored
   data on restart is unacceptable.
 
-Persistence is not currently on the roadmap's list of named phases (1-7);
-treat Phase 1 as strictly a volatile cache/store until that changes.
+Persistence isn't built yet, and isn't currently scoped as upcoming work;
+treat Cache-Pot as strictly a volatile cache/store until that changes.
 
 ## Where this goes next
 
 None of the gaps above are permanent design decisions — they're simply not
-built yet. See the [roadmap](/roadmap/) for what's planned in each
-subsequent phase, and the [landing page](/) for the overall "memory engine,
-not Redis clone" framing this compatibility layer serves.
+built yet, and nothing beyond the current version is currently scoped. See
+the [release history](/roadmap/) for what's already shipped, and the
+[landing page](/) for the overall "memory engine, not Redis clone" framing
+this compatibility layer serves.

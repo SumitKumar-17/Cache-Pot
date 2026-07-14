@@ -30,18 +30,20 @@ docs/
 │                             generated full table in commands/index.md
 ├── architecture/             how the Go code is put together (overview, storage
 │                             engine, Redis-compatibility honesty page)
-└── roadmap/                  the full 7-phase roadmap, kept in sync with ../ROADMAP.md
+└── roadmap/                  the release history (v0.1.0 -> v0.7.0), kept in sync with ../ROADMAP.md
 ```
 
 ## Conventions
 
-- **Every real command's docs page opens with a `::: tip Phase N — real` callout**;
-  every planned one opens with `::: info Planned — Phase N`. Don't mix these up when a
-  command flips from planned to real — update the callout, not just the prose.
-- **Don't link to roadmap phase-heading anchors** (e.g. `/roadmap/#phase-3-...`). A
-  phase's heading text changes when its status flips (`*(planned)*` → `✅`), which
-  changes VitePress's auto-generated anchor slug and silently breaks the link — this has
-  happened more than once in this project's history. Link to `/roadmap/` (no fragment)
+- **Every real command's docs page opens with a `::: tip vX.Y.0 — real` callout**;
+  a planned one (none exist right now) would open with `::: info Planned`. Don't mix
+  these up when a command flips from planned to real — update the callout, not just the
+  prose.
+- **Don't link to release-history version-heading anchors** (e.g.
+  `/roadmap/#v0-3-0-...`). A version's heading text can still change wording later,
+  which changes VitePress's auto-generated anchor slug and silently breaks the link —
+  this has happened more than once in this project's history (back when headings were
+  phase-labeled and flipped from "(planned)" to "✅"). Link to `/roadmap/` (no fragment)
   instead.
 - **`cleanUrls: true` in `.vitepress/config.ts` only affects generated internal
   `<a href>` links** — the actual built files on disk still have a `.html` extension

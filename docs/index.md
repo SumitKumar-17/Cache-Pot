@@ -48,27 +48,28 @@ See the full [installation](/getting-started/installation) and
 [quickstart](/getting-started/quickstart) guides for building from source and
 connecting with a client library.
 
-## Status: Phases 1-7 — the full roadmap is complete
+## Status: v0.7.0
 
-Cache-Pot was built in seven phases (see the [roadmap](/roadmap/)).
-**All seven phases are real.**
+Cache-Pot is at **v0.7.0** (see the [release history](/roadmap/)) — every
+capability below is real, running code, not a plan.
 
 - ✅ **Real today:** RESP2 protocol, pipelining, strings/hashes/lists/sets/sorted
   sets, TTL (active + passive expiry), transactions (`MULTI`/`EXEC`/`WATCH`),
-  Pub/Sub (Phase 1) — `CACHE.SEMANTIC`, `CACHE.PROMPT`, and `TOOL.CACHE`
-  (Phase 2) — `VECTOR.UPSERT`/`SEARCH`/`DELETE` (Phase 3) — `MEMORY.PUT`/`GET`/
-  `SEARCH` and `AGENT.REMEMBER`/`RECALL` (Phase 4) — [observability, cost
-  analytics, and bounded eviction](/getting-started/observability) (Phase 5):
+  Pub/Sub — `CACHE.SEMANTIC`, `CACHE.PROMPT`, and `TOOL.CACHE` —
+  `VECTOR.UPSERT`/`SEARCH`/`DELETE` — `MEMORY.PUT`/`GET`/
+  `SEARCH` and `AGENT.REMEMBER`/`RECALL` — [observability, cost
+  analytics, and bounded eviction](/getting-started/observability):
   `/metrics`, `/stats`, `/dashboard`, `--max-entries` — real LLM-backed
-  [consolidation and a knowledge graph](/commands/graph) (Phase 6):
-  `SUMMARY.CREATE`, `GRAPH.EXTRACT`/`GRAPH.RELATED`, via a new
+  [consolidation and a knowledge graph](/commands/graph):
+  `SUMMARY.CREATE`, `GRAPH.EXTRACT`/`GRAPH.RELATED`, via a
   [completion-provider](/getting-started/completions) capability — real,
   enforced [workspace isolation](/getting-started/workspaces) and full
-  [memory version history](/commands/versioning) (Phase 7):
+  [memory version history](/commands/versioning):
   `--workspace-credentials`, `MEMORY.HISTORY` — and a native
   [MCP server](/getting-started/mcp-server) exposing all of the above
   as tools, sharing the exact same memory. See the
-  [command reference](/commands/) for the exact command list.
+  [command reference](/commands/) for the exact command list, and the
+  [release history](/roadmap/) for what shipped in which version.
 
 Cache-Pot is also volatile, in-memory-only storage — there is no persistence
 yet, and data is lost on restart. Read
@@ -81,4 +82,4 @@ list of what "Redis-compatible" does and does not mean right now.
 - [Commands](/commands/) — the full command reference, generated from the
   authoritative command list
 - [Architecture](/architecture/overview) — how the server is put together
-- [Roadmap](/roadmap/) — the full seven-phase plan
+- [Release History](/roadmap/) — what shipped in each version, v0.1.0 → v0.7.0

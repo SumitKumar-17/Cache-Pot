@@ -74,16 +74,15 @@ export CACHEPOT_PORT=6380
 - If `--password` (or `CACHEPOT_PASSWORD`) is set, clients must issue
   `AUTH <password>` before running other commands. See
   [Connection commands](/commands/connection).
-- The three connection flags are the entire Phase 1 configuration surface;
-  `--embed-provider`/`--openai-api-key`/`--openai-api-base` are Phase 2 additions for
-  [`CACHE.SEMANTIC`](/commands/semantic-cache); `--mcp-port` is a Phase 3 addition for
+- `--port`/`--password`/`--max-connections` are the core connection flags;
+  `--embed-provider`/`--openai-api-key`/`--openai-api-base` configure
+  [`CACHE.SEMANTIC`](/commands/semantic-cache); `--mcp-port` configures
   the [MCP server](/getting-started/mcp-server); `--max-entries`/`--eviction-policy`
-  are Phase 5 additions (see [Observability](/getting-started/observability));
-  `--completion-provider`/`--openai-completion-model` are Phase 6 additions for
+  configure [eviction](/getting-started/observability); `--completion-provider`/
+  `--openai-completion-model` configure
   [`SUMMARY.CREATE`/`GRAPH.EXTRACT`](/commands/graph) (see
-  [LLM Completions](/getting-started/completions)); `--workspace-credentials` is a
-  Phase 7 addition for real [workspace isolation](/getting-started/workspaces). There
-  is no config file yet.
+  [LLM Completions](/getting-started/completions)); `--workspace-credentials` enables
+  real [workspace isolation](/getting-started/workspaces). There is no config file yet.
 - `CACHE.PROMPT` and `TOOL.CACHE` don't use an embedding provider — they're
   exact-match caches, so `--embed-provider` only affects `CACHE.SEMANTIC`.
 - `--openai-completion-model` reuses the *existing* `--openai-api-key`/

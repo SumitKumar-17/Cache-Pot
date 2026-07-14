@@ -1,9 +1,9 @@
 # Semantic Cache Commands
 
-::: tip Phase 2 — real
+::: tip v0.2.0 — real
 These commands work today. They require an embedding provider — see
 [configuration](/getting-started/configuration) for `--embed-provider`. Their optional
-`COST` argument is a Phase 5 addition — see [Observability](/getting-started/observability).
+`COST` argument was added in v0.5.0 — see [Observability](/getting-started/observability).
 :::
 
 | Command | Summary |
@@ -79,4 +79,4 @@ redis-cli -p 6380 CACHE.PROMPT GET "Hello {{name}}" '{"name": "Sumit"}' gpt-4
 
 See [`internal/semantic`](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/semantic)
 for the implementation, and [tool cache](/commands/tool-cache) for the related
-tool-result caching command landing in the same phase.
+tool-result caching command that shipped alongside it in v0.2.0.

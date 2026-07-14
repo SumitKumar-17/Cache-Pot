@@ -1,9 +1,9 @@
 # Agent Memory Commands
 
-::: tip Phase 4 — real
-These commands work today, built on the [vector store](/commands/vector) from Phase 3
-for semantic search. See [MCP Server](/getting-started/mcp-server) for the equivalent
-`remember`/`recall` MCP tools.
+::: tip v0.4.0 — real
+These commands work today, built on the [vector store](/commands/vector) introduced in
+v0.3.0 for semantic search. See [MCP Server](/getting-started/mcp-server) for the
+equivalent `remember`/`recall` MCP tools.
 :::
 
 | Command | Summary |
@@ -17,7 +17,7 @@ for semantic search. See [MCP Server](/getting-started/mcp-server) for the equiv
 
 This is where Cache-Pot becomes an actual memory engine rather than a cache: a real
 memory domain layer with short-term, long-term, episodic, and semantic memory kinds,
-indexed for semantic search via the same flat vector index Phase 3 introduced.
+indexed for semantic search via the same flat vector index v0.3.0 introduced.
 
 ## MEMORY.PUT
 

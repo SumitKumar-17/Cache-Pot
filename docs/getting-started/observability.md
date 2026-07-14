@@ -1,6 +1,6 @@
 # Observability, Cost Analytics & Eviction
 
-::: tip Phase 5 — real
+::: tip v0.5.0 — real
 Metrics, cost analytics, the dashboard, and bounded eviction all work today.
 :::
 

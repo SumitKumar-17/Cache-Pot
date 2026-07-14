@@ -1,6 +1,6 @@
 # Connection Commands
 
-::: info Phase 1 — Real
+::: info v0.1.0 — Real
 Every command on this page is implemented today.
 :::
 
@@ -11,10 +11,10 @@ and basic introspection for a client connection.
 |---|---|
 | `PING` | Check server liveness / measure round-trip latency |
 | `ECHO` | Echo back the given argument |
-| `SELECT` | Select a logical database (Phase 1 only accepts db `0`) |
-| `HELLO` | Protocol handshake (RESP2 only in Phase 1; RESP3 is rejected cleanly) |
+| `SELECT` | Select a logical database (only accepts db `0`) |
+| `HELLO` | Protocol handshake (RESP2 only; RESP3 is rejected cleanly) |
 | `AUTH` | Authenticate the connection against the configured password |
-| `CLIENT` | Client introspection/control (`GETNAME`/`SETNAME` in Phase 1) |
+| `CLIENT` | Client introspection/control (`GETNAME`/`SETNAME`) |
 | `COMMAND` | Minimal command-table introspection |
 | `INFO` | Minimal server info/stats sections |
 | `QUIT` | Close the connection |

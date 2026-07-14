@@ -1,6 +1,6 @@
 # Tool Cache Commands
 
-::: tip Phase 2 — real
+::: tip v0.2.0 — real
 This command works today.
 :::
 
@@ -37,4 +37,4 @@ redis-cli -p 6380 TOOL.CACHE GET github.getIssue '{"issue":42,"repo":"cache-pot"
 
 See [`internal/toolcache`](https://github.com/SumitKumar-17/cache-pot/tree/main/internal/toolcache)
 for the implementation, and [semantic cache](/commands/semantic-cache) for the related
-prompt-caching commands landing in the same phase.
+prompt-caching commands that shipped alongside it in v0.2.0.

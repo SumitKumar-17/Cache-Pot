@@ -1,6 +1,6 @@
 # Versioning Commands
 
-::: tip Phase 7 — real
+::: tip v0.7.0 — real
 This command works today.
 :::
 
@@ -14,8 +14,8 @@ This command works today.
 MEMORY.HISTORY <workspace> <id> [LIMIT <n>]
 ```
 
-Every [`MEMORY.PUT`](/commands/memory) to an existing id bumps its `version` — Phase 4
-already tracked the version number, but discarded the prior content. Phase 7 keeps it:
+Every [`MEMORY.PUT`](/commands/memory) to an existing id bumps its `version` — v0.4.0
+already tracked the version number, but discarded the prior content. v0.7.0 keeps it:
 `MEMORY.HISTORY` returns every version of a memory item, **oldest first, ending at the
 current version** — the building block for "what did the agent know yesterday."
 

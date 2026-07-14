@@ -1,6 +1,6 @@
 # Generic Commands (Keys / TTL)
 
-::: info Phase 1 — Real
+::: info v0.1.0 — Real
 Every command on this page is implemented today.
 :::
 
@@ -21,7 +21,7 @@ them: existence, deletion, expiry, type introspection, and iteration.
 | `SCAN` | Cursor-based incremental iteration over the keyspace |
 | `RENAME` | Rename a key |
 | `FLUSHDB` | Remove all keys from the current workspace |
-| `FLUSHALL` | Remove all keys from all workspaces (Phase 1: single workspace, so this behaves the same as `FLUSHDB`) |
+| `FLUSHALL` | Remove all keys from all workspaces (there's no "list every workspace" API yet, so this behaves the same as `FLUSHDB`) |
 
 ## TTL semantics
 
@@ -48,11 +48,11 @@ redis-cli -p 6380 TTL session:abc
 
 ## SCAN semantics
 
-`SCAN`'s cursor is a Phase 1 simplification: rather than Redis's reverse
+`SCAN`'s cursor is a deliberate simplification: rather than Redis's reverse
 binary iteration, Cache-Pot recomputes and sorts the full matching keyspace
 per call and uses the sort position as the cursor. This gives fully
 deterministic ordering, at the cost of being `O(n log n)` per call — fine at
-Phase 1 key-count scales, and a candidate to revisit if that changes.
+today's key-count scales, and a candidate to revisit if that changes.
 
 ```bash
 redis-cli -p 6380 SCAN 0 MATCH "user:*" COUNT 10

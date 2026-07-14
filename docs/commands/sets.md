@@ -1,6 +1,6 @@
 # Set Commands
 
-::: info Phase 1 — Real
+::: info v0.1.0 — Real
 Every command on this page is implemented today.
 :::
 

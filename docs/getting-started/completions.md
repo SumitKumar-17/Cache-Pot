@@ -1,11 +1,11 @@
 # LLM Completions
 
-::: tip Phase 6 — real
-Cache-Pot's first text-*generation* capability. Everything before Phase 6
+::: tip v0.6.0 — real
+Cache-Pot's first text-*generation* capability. Everything before v0.6.0
 (`CACHE.SEMANTIC`, `MEMORY.SEARCH`, `VECTOR.SEARCH`, ...) only ever produced
 *embeddings* — a vector representing meaning, never new text. `SUMMARY.CREATE` and
 `GRAPH.EXTRACT` need an LLM that actually writes text (a consolidated summary, a
-structured entity/relationship extraction), so Phase 6 adds that as a new provider
+structured entity/relationship extraction), so v0.6.0 added that as a new provider
 abstraction, `internal/llm.CompletionProvider`, deliberately kept independent from
 `internal/embed.Provider`.
 :::

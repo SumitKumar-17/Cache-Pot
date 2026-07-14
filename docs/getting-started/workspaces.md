@@ -1,20 +1,20 @@
 # Workspaces & Multi-Tenancy
 
-::: tip Phase 7 — real
+::: tip v0.7.0 — real
 Real, enforced workspace isolation — not just a partitioning label.
 :::
 
 ## What a workspace is
 
-`workspace` has been threaded through Cache-Pot's storage layer since Phase 1 (check
-`internal/storage.Engine`'s method signatures — every one takes a `workspace string`
-first parameter), but until Phase 7 it was purely a partitioning label: any connection
-could read or write any workspace string it typed. Phase 7 makes it a real tenant
-boundary, opt-in, on top of `AUTH`.
+`workspace` has been threaded through Cache-Pot's storage layer since its very first
+version (check `internal/storage.Engine`'s method signatures — every one takes a
+`workspace string` first parameter), but until v0.7.0 it was purely a partitioning
+label: any connection could read or write any workspace string it typed. v0.7.0 made
+it a real tenant boundary, opt-in, on top of `AUTH`.
 
 ## Enabling it
 
-By default (no change from Phases 1-6): a single shared `--password` (or none at all),
+By default (no change from earlier versions): a single shared `--password` (or none at all),
 and every workspace string is unrestricted. To turn on real isolation, configure
 per-workspace credentials instead:
 

@@ -1,6 +1,6 @@
 # Vector Commands
 
-::: tip Phase 3 — real
+::: tip v0.3.0 — real
 These commands work today: a flat (brute-force) namespace-partitioned vector index.
 See [architecture](/architecture/overview) for how it fits together, and
 [MCP Server](/getting-started/mcp-server) for the equivalent `store_vector`/

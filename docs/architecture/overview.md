@@ -10,26 +10,26 @@ internal/
   storage/           the Engine interface — the seam between RESP handlers and any data-structure store
     memstore/        the implementation of Engine: a sharded in-memory map, keys namespaced by workspace
     ttl/             active (background) expiry reaper for memstore
-  auth/               AUTH gating: single shared password, or real per-workspace credentials (Phase 7)
+  auth/               AUTH gating: single shared password, or real per-workspace credentials (v0.7.0)
   observability/      structured logging + metrics (/metrics, /stats, /dashboard)
-  embed/              embedding-provider abstraction: mock + OpenAI (Phase 2)
-  semantic/           semantic/prompt cache: CACHE.SEMANTIC, CACHE.PROMPT (Phase 2)
-  toolcache/          tool-result cache: TOOL.CACHE (Phase 2)
-  vector/             native flat vector index: VECTOR.UPSERT/SEARCH/DELETE (Phase 3)
-  mcp/                native MCP server, sharing the same instances as resp.Deps (Phase 3)
-  memory/             agent memory domain: MEMORY.*/AGENT.*, version history (Phases 4, 7)
-  eviction/           eviction policies: LRU, Weighted, consumed by memstore's --max-entries bound (Phase 5)
-  analytics/          cost/usage analytics: embedding/completion $ cost tracking (Phase 5)
-  llm/                text-generation abstraction: CompletionProvider, mock + OpenAI (Phase 6)
-  consolidate/        memory consolidation: SUMMARY.CREATE (Phase 6a)
-  graph/              knowledge graph: GRAPH.EXTRACT/RELATED (Phase 6b)
-api/commands.yaml     authoritative command list across all 7 phases (source of truth for docs/commands)
+  embed/              embedding-provider abstraction: mock + OpenAI (v0.2.0)
+  semantic/           semantic/prompt cache: CACHE.SEMANTIC, CACHE.PROMPT (v0.2.0)
+  toolcache/          tool-result cache: TOOL.CACHE (v0.2.0)
+  vector/             native flat vector index: VECTOR.UPSERT/SEARCH/DELETE (v0.3.0)
+  mcp/                native MCP server, sharing the same instances as resp.Deps (v0.3.0)
+  memory/             agent memory domain: MEMORY.*/AGENT.*, version history (v0.4.0, v0.7.0)
+  eviction/           eviction policies: LRU, Weighted, consumed by memstore's --max-entries bound (v0.5.0)
+  analytics/          cost/usage analytics: embedding/completion $ cost tracking (v0.5.0)
+  llm/                text-generation abstraction: CompletionProvider, mock + OpenAI (v0.6.0)
+  consolidate/        memory consolidation: SUMMARY.CREATE (v0.6.0)
+  graph/              knowledge graph: GRAPH.EXTRACT/RELATED (v0.6.0)
+api/commands.yaml     authoritative command list, versioned v0.1.0-v0.7.0 (source of truth for docs/commands)
 test/                 integration tests
 ```
 
-All seven phases are wired into the running server today — every package above is
-exercised by a real running Cache-Pot process, not just present in the tree. See the
-[roadmap](/roadmap/) for what each phase added.
+Every version's capability is wired into the running server today — every package
+above is exercised by a real running Cache-Pot process, not just present in the tree.
+See the [release history](/roadmap/) for what each version added.
 
 ## The seam: `storage.Engine`
 
@@ -62,9 +62,10 @@ touching the command dispatch layer in `internal/server/resp`.
 
 Every `Engine` method takes a `workspace string` as its first parameter, and
 `memstore` namespaces every key by `(workspace, key)` internally (see
-`memstore.nsKey`) — this has been real routing since Phase 1, not just an
-inert placeholder. Phase 7 built real per-workspace **authorization** on top
-of it: `--workspace-credentials` configures `workspace:password` pairs, and
+`memstore.nsKey`) — this has been real routing since the very first version,
+not just an inert placeholder. v0.7.0 built real per-workspace
+**authorization** on top of it: `--workspace-credentials` configures
+`workspace:password` pairs, and
 `internal/auth`/`ClientState.authorizedForWorkspace` reject a command whose
 workspace argument doesn't match the connection's authenticated workspace.
 See [Workspaces & Multi-Tenancy](/getting-started/workspaces) for the full

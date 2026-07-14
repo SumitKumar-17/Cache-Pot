@@ -1,6 +1,6 @@
 # Pub/Sub & Transactions
 
-::: info Phase 1 — Real
+::: info v0.1.0 — Real
 Every command on this page is implemented today.
 :::
 
@@ -56,11 +56,12 @@ optimistic-locking contract as Redis.
 Every key tracks a per-key mutation-version counter used by `WATCH`.
 Transaction bodies (the queued commands run at `EXEC` time) execute while
 holding a **single global mutex** across the whole store, rather than a
-per-key or per-shard locking protocol. This is a deliberate Phase 1
+per-key or per-shard locking protocol. This is a deliberate
 simplicity-over-throughput tradeoff: it avoids lock-ordering/deadlock
-complexity for what is, at Phase 1 traffic levels, a low-throughput feature.
+complexity for what is, at today's traffic levels, a low-throughput feature.
 Non-transactional commands are unaffected — they still use Cache-Pot's
 normal sharded locking (see [Storage Engine](/architecture/storage-engine))
 and run concurrently with each other. Only the body of a `MULTI`/`EXEC`
 block serializes against other transaction bodies. This is a candidate to
-revisit in Phase 5 if transaction throughput becomes a bottleneck.
+revisit if transaction throughput ever becomes a bottleneck — it hasn't
+needed to be so far.

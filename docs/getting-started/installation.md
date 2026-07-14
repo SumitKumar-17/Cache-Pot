@@ -1,7 +1,7 @@
 # Installation
 
 Cache-Pot ships as a single Go binary (`cachepotd`) with no external
-dependencies — Phase 1 storage is entirely in-memory, so there is no database
+dependencies — storage is entirely in-memory, so there is no database
 or persistence layer to install alongside it.
 
 ## Option 1: Docker Compose
@@ -18,9 +18,9 @@ container environment.
 
 ::: info
 The compose file mounts a `cachepot-data` volume, but that volume is
-currently a no-op — Phase 1 has no persistence (see
+currently a no-op — Cache-Pot has no persistence yet (see
 [Redis compatibility](/architecture/redis-compatibility)), so nothing is
-actually written to it yet. It's reserved for a future phase.
+actually written to it. It's reserved for whenever persistence is built.
 :::
 
 ## Option 2: `go build`

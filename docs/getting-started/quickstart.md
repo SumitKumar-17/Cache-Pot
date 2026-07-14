@@ -1,7 +1,7 @@
 # Quickstart
 
 This walks through connecting to a running Cache-Pot server and exercising
-the Phase 1-7 commands that are real today. See
+the commands that are real today. See
 [Installation](/getting-started/installation) if you don't have a server
 running yet.
 
@@ -79,9 +79,9 @@ Any other RESP2 client (redis-py, ioredis, jedis, node-redis, etc.) works the
 same way — point it at Cache-Pot's host/port instead of Redis's.
 
 See the [command reference](/commands/) for the full list of what's
-implemented in Phase 1-7.
+implemented today.
 
-## Semantic and prompt caching (Phase 2)
+## Semantic and prompt caching
 
 These run against the default `mock` embedding provider out of the box — see
 [configuration](/getting-started/configuration) to switch to `openai` for
@@ -101,7 +101,7 @@ redis-cli -p 6380 TOOL.CACHE GET github.getIssue '{"issue":42,"repo":"cache-pot"
 See the [semantic cache](/commands/semantic-cache) and
 [tool cache](/commands/tool-cache) pages for the full command syntax.
 
-## Vector search and MCP (Phase 3)
+## Vector search and MCP
 
 ```bash
 redis-cli -p 6380 VECTOR.UPSERT docs a '[1,0,0]' TEXT "cats are cute"
@@ -120,7 +120,7 @@ exact same in-memory state as the RESP commands above. See the
 
 See the [vector commands](/commands/vector) page for the full command syntax.
 
-## Shared agent memory (Phase 4)
+## Shared agent memory
 
 Cache-Pot's actual pitch beyond "Redis clone" is shared, semantic memory for agents —
 and it's real now:
@@ -140,7 +140,7 @@ redis-cli -p 6380 MEMORY.SEARCH default "how does this user like answers formatt
 See the [agent memory commands](/commands/memory) page for the full command syntax,
 including `MEMORY.PUT`/`GET` for direct control over memory ids, kinds, and metadata.
 
-## Observability, cost analytics, and eviction (Phase 5)
+## Observability, cost analytics, and eviction
 
 ```bash
 curl http://localhost:6381/metrics    # Prometheus text
@@ -153,7 +153,7 @@ $0.015 of "money saved" — see the [Observability](/getting-started/observabili
 for the full picture, including how to bound the keyspace with `--max-entries` and
 `--eviction-policy`.
 
-## Consolidation and the knowledge graph (Phase 6)
+## Consolidation and the knowledge graph
 
 ```bash
 redis-cli -p 6380 SUMMARY.CREATE research-bot
@@ -170,7 +170,7 @@ no real language understanding, so `GRAPH.EXTRACT` against it honestly extracts
 nothing. Use `--completion-provider openai` for genuine summarization/extraction. See
 the [Consolidation & Knowledge Graph commands](/commands/graph) page.
 
-## Workspaces and memory versioning (Phase 7)
+## Workspaces and memory versioning
 
 ```bash
 redis-cli -p 6380 MEMORY.PUT research-bot "note v1" ID mem-1
@@ -187,5 +187,4 @@ redis-cli -p 6380 -a secret1 MEMORY.PUT bot "note" WORKSPACE other
 
 See the [Versioning](/commands/versioning) and
 [Workspaces & Multi-Tenancy](/getting-started/workspaces) pages for the full
-command syntax and enforcement details — this completes the original
-seven-phase roadmap.
+command syntax and enforcement details.

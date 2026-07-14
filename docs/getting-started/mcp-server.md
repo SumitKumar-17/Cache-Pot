@@ -1,6 +1,6 @@
 # MCP Server
 
-::: tip Phases 3-7 — real
+::: tip v0.3.0-v0.7.0 — real
 Cache-Pot runs a native MCP (Model Context Protocol) server alongside its RESP
 listener, sharing the exact same in-memory state — no adapter layer.
 :::
@@ -59,7 +59,7 @@ exposed as its own MCP tool (only the always-agent-scoped `recall` is, for now).
 
 ::: warning No authentication or workspace enforcement
 Every tool above calls its shared store directly, bypassing RESP's `ClientState`
-entirely — there is no `AUTH` concept for MCP connections, and none of Phase 7's
+entirely — there is no `AUTH` concept for MCP connections, and none of the
 [workspace authorization](/getting-started/workspaces) applies here. A tool call can
 read/write any workspace regardless of `--workspace-credentials`. If you're relying on
 workspace isolation for real multi-tenancy, don't expose the MCP port to untrusted

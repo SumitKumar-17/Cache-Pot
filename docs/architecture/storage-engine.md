@@ -1,9 +1,9 @@
 # Storage Engine
 
-Phase 1's storage backend, `internal/storage/memstore`, is a sharded,
+Cache-Pot's storage backend, `internal/storage/memstore`, is a sharded,
 in-memory implementation of the `storage.Engine` interface (see
 [Architecture Overview](/architecture/overview)). This page describes how it
-actually works — no forward-looking claims about later phases.
+actually works — no forward-looking claims about unbuilt features.
 
 ## Sharded map
 
@@ -80,22 +80,23 @@ versa).
   holding `Store.globalMu` — a single mutex across the *entire* store, not
   a per-key or per-shard lock.
 
-This is a deliberate Phase 1 tradeoff: a single global mutex avoids the
+This is a deliberate tradeoff: a single global mutex avoids the
 lock-ordering/deadlock complexity of a proper cross-shard locking protocol,
-for what is, at Phase 1 traffic levels, a low-throughput feature (only
+for what is, at today's traffic levels, a low-throughput feature (only
 `MULTI`/`EXEC` bodies serialize against each other — ordinary,
 non-transactional commands still use the normal per-shard locks and run
 concurrently with each other and with transaction bodies' individual
-operations). It is called out in the source as a candidate to revisit in
-Phase 5 if transaction throughput becomes a bottleneck; it hasn't been
-revisited yet.
+operations). It is called out in the source as a candidate to revisit if
+transaction throughput becomes a bottleneck; it hasn't been revisited yet.
 
 ## What this means operationally
 
-- All data lives in process memory. There is no persistence layer in Phase
-  1 — see [Redis Compatibility](/architecture/redis-compatibility) for the
-  full implications (data is lost on restart, no RDB/AOF).
+- All data lives in process memory. There is no persistence layer — see
+  [Redis Compatibility](/architecture/redis-compatibility) for the full
+  implications (data is lost on restart, no RDB/AOF).
 - Memory usage is bounded only by the host's available RAM and whatever TTLs
-  clients set — there's no eviction policy wired in yet beyond what TTL
-  expiry removes (`internal/eviction` exists as scaffolding for later
-  phases, not active today).
+  clients set, unless `--max-entries` is configured: `internal/eviction`'s
+  `LRU` (default) or `Weighted` policy then bounds the total live-key count,
+  reclaiming keys once it's exceeded (approximate below the shard count —
+  see [Observability](/getting-started/observability#eviction) for the
+  verified numbers).
