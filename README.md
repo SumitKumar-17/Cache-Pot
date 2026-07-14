@@ -9,16 +9,17 @@ It speaks the Redis protocol, so adopting it starts with swapping a connection s
 It grows into shared, semantic, versioned memory that every agent and model in your stack
 can read and write.
 
-> **Status: Phases 1-7 — the full original roadmap is complete.** Cache-Pot is a real,
-> working Redis-compatible cache (RESP2, core data structures, TTL, transactions,
-> pub/sub) plus semantic/prompt/tool caching (`CACHE.SEMANTIC`, `CACHE.PROMPT`,
-> `TOOL.CACHE`), a native vector store (`VECTOR.UPSERT`/`SEARCH`/`DELETE`), shared agent
-> memory (`MEMORY.*`, `AGENT.REMEMBER`/`RECALL`), a native MCP server sharing all of that
-> same memory, observability/cost analytics/eviction (`/metrics`, `/stats`, `/dashboard`,
+> **Current version: v0.7.0.** Cache-Pot is a real, working Redis-compatible cache
+> (RESP2, core data structures, TTL, transactions, pub/sub) plus semantic/prompt/tool
+> caching (`CACHE.SEMANTIC`, `CACHE.PROMPT`, `TOOL.CACHE`), a native vector store
+> (`VECTOR.UPSERT`/`SEARCH`/`DELETE`), shared agent memory (`MEMORY.*`,
+> `AGENT.REMEMBER`/`RECALL`), a native MCP server sharing all of that same memory,
+> observability/cost analytics/eviction (`/metrics`, `/stats`, `/dashboard`,
 > `--max-entries`), real LLM-backed consolidation + a knowledge graph
 > (`SUMMARY.CREATE`, `GRAPH.EXTRACT`/`GRAPH.RELATED`), and real, enforced multi-tenancy
 > plus full memory version history (`--workspace-credentials`, `MEMORY.HISTORY`). See
-> [ROADMAP.md](ROADMAP.md) for the full arc and honest status of each pillar.
+> [ROADMAP.md](ROADMAP.md) for the full release history and honest status of every
+> capability.
 
 ## Why not just Redis + Pinecone + Mem0?
 
@@ -69,12 +70,12 @@ Full docs (vision, getting started, command reference, architecture, roadmap) li
 cd docs && npm install && npm run docs:dev
 ```
 
-## Roadmap
+## Release history
 
-Cache-Pot was built in seven phases, from a Redis-compatible core to a fully versioned,
-multi-tenant memory engine with semantic caching, native vector search, shared agent
-memory, cost analytics, and a knowledge graph. See [ROADMAP.md](ROADMAP.md) — all seven
-phases are done.
+Cache-Pot went from a Redis-compatible core (v0.1.0) to a fully versioned,
+multi-tenant memory engine (v0.7.0) with semantic caching, native vector search,
+shared agent memory, cost analytics, and a knowledge graph along the way. See
+[ROADMAP.md](ROADMAP.md) for the full version-by-version history.
 
 ## License
 

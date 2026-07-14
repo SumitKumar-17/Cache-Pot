@@ -1,12 +1,12 @@
 # Contributing
 
-Cache-Pot's original seven-phase roadmap (see [ROADMAP.md](ROADMAP.md)) is complete: the
+Cache-Pot is at v0.7.0 (see [ROADMAP.md](ROADMAP.md) for the full release history): the
 Redis-compatible core, semantic/prompt/tool caching, a native vector store, shared
 agent memory, a native MCP server, observability/cost analytics/eviction, real
 LLM-backed consolidation + a knowledge graph, and real multi-tenant workspace isolation
-+ full memory versioning. Contributions are welcome, especially:
++ full memory versioning are all real today. Contributions are welcome, especially:
 
-- Redis error-string compatibility fixes and Phase 1 command coverage gaps
+- Redis error-string compatibility fixes and core command coverage gaps
 - Test coverage (unit tests per command, integration tests against real clients)
 - Documentation fixes in `docs/`
 - Real-world evaluation of `GRAPH.EXTRACT`/`SUMMARY.CREATE` output quality against

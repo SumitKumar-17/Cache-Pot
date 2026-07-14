@@ -11,10 +11,10 @@ It's a single server that speaks the Redis protocol (RESP2) — so any existing 
 client works against it unmodified — and grows into semantic caching, native vector
 search, shared agent memory, cost analytics, and a knowledge graph, all sharing one
 in-memory state. See [README.md](README.md) for the full pitch and
-[ROADMAP.md](ROADMAP.md) for the phased plan. **All 7 phases of the original roadmap
-are done and real** as of this writing — check `git log` and `ROADMAP.md` before
-assuming what's current, this will go stale (e.g. new phases beyond the original 7 may
-have started since).
+[ROADMAP.md](ROADMAP.md) for the version-by-version release history. **The current
+version is v0.7.0, and every capability described in this file is real** as of this
+writing — check `git log` and `ROADMAP.md` before assuming what's current, this will go
+stale as new versions ship.
 
 ## Golden rule: never present planned work as real
 
@@ -43,7 +43,7 @@ cmd/cachepotd/main.go        entrypoint: flags/env -> server.Config -> server.Ru
 internal/server/             process wiring: RESP + MCP + /metrics/stats/dashboard listeners
 internal/server/resp/        RESP2 protocol, command dispatch, all handlers_*.go
 internal/storage/            Engine interface (the seam) + memstore (sharded KV impl) + ttl (active expiry)
-internal/auth/                single shared-password AUTH (Phase 1) or real per-workspace AUTH via --workspace-credentials (Phase 7)
+internal/auth/                single shared-password AUTH, or real per-workspace AUTH via --workspace-credentials
 internal/embed/               embeddings: Provider interface, mock + OpenAI impls
 internal/llm/                 text GENERATION: CompletionProvider interface, mock + OpenAI chat impls
 internal/semantic/            CACHE.SEMANTIC (similarity) + CACHE.PROMPT (exact-match), on internal/embed
@@ -57,7 +57,7 @@ internal/observability/       Metrics (+/metrics, /stats, /dashboard), embed/com
 internal/analytics/           cost tracking: embedding/completion $ cost, opt-in COST-driven money-saved
 internal/eviction/            Policy interface (LRU, Weighted), consumed by memstore's --max-entries bound
 docs/                          VitePress site, own package.json — see docs/AGENTS.md
-api/commands.yaml             source of truth for the whole command surface across all 7 phases
+api/commands.yaml             source of truth for the whole command surface, versioned v0.1.0-v0.7.0
 ```
 
 **The seam to respect**: `internal/storage.Engine` is an interface; `internal/storage/
@@ -74,17 +74,17 @@ or similar instead of reusing the shared one, you've silently broken that guaran
 ## Conventions that recur across this codebase
 
 - **`workspace` is threaded through everything, first-parameter.** This pre-wiring paid
-  off in Phase 7: real per-workspace AUTH enforcement
+  off later: real per-workspace AUTH enforcement
   (`internal/auth`, `ClientState.authorizedForWorkspace`) was built entirely on top of
-  routing that already existed since Phase 1 — no storage call site changed. When you
-  add a new store/command, keep threading a `workspace string` parameter through it the
-  same way.
+  routing that already existed from the very first version — no storage call site
+  changed. When you add a new store/command, keep threading a `workspace string`
+  parameter through it the same way.
 - **Expand the interface/constructor, update every call site.** This project's normal
   way of adding a capability to an existing type is to widen its method signature or
   constructor and fix up every caller, rather than bolting on a parallel method. Look
-  at how `MemoryStore.Search`'s signature grew across Phases 4-6, or how
-  `InstrumentProvider`/`mcp.New` gained parameters each phase, before choosing a
-  different pattern.
+  at how `MemoryStore.Search`'s signature grew across several releases, or how
+  `InstrumentProvider`/`mcp.New` gained parameters as capabilities were added, before
+  choosing a different pattern.
 - **Redis-shaped errors matter.** Real Redis clients pattern-match on error string
   prefixes (`WRONGTYPE`, `ERR wrong number of arguments for 'x' command`). Reuse the
   helpers in `internal/server/resp/errors.go` — don't invent a new error string shape
@@ -142,13 +142,13 @@ running the binary).
 ## Commit style
 
 Small, focused commits — one logical unit of work each (a new capability, a docs
-update, a bug fix), not one giant commit per phase. See `git log` for the established
+update, a bug fix), not one giant commit per release. See `git log` for the established
 granularity. Explain *why* in the commit body, not just *what* — the diff already shows
 what changed.
 
 ## Known, honest gaps (check before assuming something works)
 
-- No persistence: Cache-Pot Phase 1's core KV store is volatile, in-memory only.
+- No persistence: the core KV store is volatile, in-memory only.
 - MCP has no authentication layer at all — it doesn't gate by workspace/credentials the
   way RESP's `AUTH` does, even with `--workspace-credentials` configured. See
   `docs/getting-started/mcp-server.md` and `docs/getting-started/workspaces.md`.
@@ -159,8 +159,7 @@ what changed.
 - `FLUSHALL` only flushes the caller's own workspace (same as `FLUSHDB`) — `Engine` has
   no "list all workspaces" API, so there's no way to iterate every workspace
   server-wide.
-- The original 7-phase roadmap is complete — check `ROADMAP.md` for anything started
-  beyond it.
+- v0.7.0 is current — check `ROADMAP.md`/`git log` for anything shipped since.
 
 For deeper context on *why* a given piece of this exists, `git log --oneline` and the
 individual commit messages are unusually detailed on purpose — read them before
