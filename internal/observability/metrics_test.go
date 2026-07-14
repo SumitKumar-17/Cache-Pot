@@ -37,6 +37,40 @@ func TestCacheHitMissCounters(t *testing.T) {
 	}
 }
 
+func TestConnectionCommandErrorAndEvictionCounters(t *testing.T) {
+	m := NewMetrics()
+	m.ConnectionOpened()
+	m.ConnectionOpened()
+	m.ConnectionClosed()
+	m.ConnectionRejected()
+	m.CommandExecuted()
+	m.CommandExecuted()
+	m.CommandExecuted()
+	m.ErrorReturned()
+	m.KeyEvicted()
+	m.KeyEvicted()
+
+	snap := m.Snapshot()
+	if snap.ConnectionsTotal != 2 {
+		t.Fatalf("ConnectionsTotal = %d, want 2", snap.ConnectionsTotal)
+	}
+	if snap.ConnectionsActive != 1 {
+		t.Fatalf("ConnectionsActive = %d, want 1 (2 opened, 1 closed)", snap.ConnectionsActive)
+	}
+	if snap.ConnectionsRejected != 1 {
+		t.Fatalf("ConnectionsRejected = %d, want 1", snap.ConnectionsRejected)
+	}
+	if snap.CommandsTotal != 3 {
+		t.Fatalf("CommandsTotal = %d, want 3", snap.CommandsTotal)
+	}
+	if snap.ErrorsTotal != 1 {
+		t.Fatalf("ErrorsTotal = %d, want 1", snap.ErrorsTotal)
+	}
+	if snap.EvictionsTotal != 2 {
+		t.Fatalf("EvictionsTotal = %d, want 2", snap.EvictionsTotal)
+	}
+}
+
 func TestVectorMemoryCounters(t *testing.T) {
 	m := NewMetrics()
 	m.VectorSearchPerformed()

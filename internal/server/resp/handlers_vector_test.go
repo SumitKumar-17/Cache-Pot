@@ -206,6 +206,37 @@ func TestVectorSearchUnknownOptionSyntaxError(t *testing.T) {
 	}
 }
 
+// TestVectorSearchMetricOptionChangesRanking proves the METRIC keyword
+// actually threads through to parseMetric and changes which vector.
+// DistanceMetric is used, not just that it's accepted syntactically -- using
+// the same "close in Euclidean distance but low dot-product alignment"
+// fixture internal/vector's own TestSearchMetricSwitchChangesRanking uses at
+// the store level, so a broken parseMetric mapping (e.g. DOT and EUCLIDEAN
+// swapped) would flip which id ranks first here.
+func TestVectorSearchMetricOptionChangesRanking(t *testing.T) {
+	cs := newTestClientState(t)
+	query := "[1,0]"
+	execCommand(t, cs, "VECTOR.UPSERT", "docs", "aligned", "[10,0.1]")
+	execCommand(t, cs, "VECTOR.UPSERT", "docs", "close", "[0.9,0]")
+
+	out := execCommand(t, cs, "VECTOR.SEARCH", "docs", query, "METRIC", "euclidean", "K", "1")
+	if want := "*1\r\n$5\r\nclose\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.SEARCH METRIC euclidean = %q, want %q", out, want)
+	}
+
+	out = execCommand(t, cs, "VECTOR.SEARCH", "docs", query, "METRIC", "dot", "K", "1")
+	if want := "*1\r\n$7\r\naligned\r\n"; string(out) != want {
+		t.Fatalf("VECTOR.SEARCH METRIC dot = %q, want %q", out, want)
+	}
+
+	// METRIC is case-insensitive, and unrecognized (cosine is the only other
+	// valid RESP option and is the default, so this checks a bogus value).
+	out = execCommand(t, cs, "VECTOR.SEARCH", "docs", query, "METRIC", "manhattan")
+	if !strings.HasPrefix(string(out), "-ERR syntax error") {
+		t.Fatalf("VECTOR.SEARCH METRIC manhattan (unknown) = %q, want a syntax error", out)
+	}
+}
+
 // TestVectorCommandsUnrestrictedInSinglePasswordMode is the regression test
 // proving the multi-workspace enforcement did NOT change today's
 // default (single-password/no-auth) behavior: VECTOR.UPSERT/SEARCH/DELETE
