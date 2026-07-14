@@ -23,6 +23,24 @@ go test ./... -race
 golangci-lint run
 ```
 
+Every command is exercised end-to-end against a real running server in
+[`test/integration`](test/integration) (`main_test.go`, `auth_workspace_test.go`,
+`full_command_sweep_test.go`), all using the default mock providers so this needs no
+network access or API key.
+
+If you have your own OpenAI API key, `test/integration/real_openai_test.go` drives
+Cache-Pot against the *real* OpenAI API (real embeddings, real chat completions) — the
+only place in the repo that does. It auto-skips without a key (put one in a git-ignored
+`.env` at the repo root), so it never runs in CI:
+
+```bash
+go test ./test/integration/... -run TestRealOpenAI -v
+```
+
+Each run costs a small amount of real money; this test suite has already caught at
+least one real bug a mock-only suite couldn't (real embedding cost tracking silently
+never firing — see `test/integration/AGENTS.md`).
+
 ## Adding a command
 
 1. Add the handler in `internal/server/resp/handlers_<family>.go`, implemented against
