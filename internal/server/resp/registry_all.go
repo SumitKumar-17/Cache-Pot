@@ -1,7 +1,7 @@
 package resp
 
-// RegisterAll builds the full Phase 1 command table onto r. server.go calls
-// this once at startup before accepting connections.
+// RegisterAll builds the full command table onto r. server.go calls this
+// once at startup before accepting connections.
 func RegisterAll(r *Registry) {
 	RegisterConn(r)
 	RegisterGeneric(r)

@@ -1,4 +1,4 @@
-// Package memory implements Phase 4's shared agent-memory domain layer:
+// Package memory implements Cache-Pot's shared agent-memory domain layer:
 // short-term, long-term, episodic, and semantic memories keyed by
 // agent/workspace, searchable by embedding similarity across every agent in
 // a workspace (or scoped to one agent). It backs the MEMORY.PUT/MEMORY.GET/
@@ -7,10 +7,10 @@
 //
 // Versioning: each Put to an existing (workspace, id) bumps Version and
 // replaces the stored record's content/embedding/metadata in place as the
-// current/latest version. Phase 7 additionally keeps a bounded log of every
-// version a Put makes obsolete (see Store's doc comment on its history
-// field and maxMemoryHistoryPerRecord), so Store.History can answer "what
-// did the agent know at each point in time" for a given id -- see
+// current/latest version. A bounded log of every version a Put makes
+// obsolete is also kept (see Store's doc comment on its history field and
+// maxMemoryHistoryPerRecord), so Store.History can answer "what did the
+// agent know at each point in time" for a given id -- see
 // internal/server/resp/handlers_memory.go's MEMORY.HISTORY command.
 package memory
 

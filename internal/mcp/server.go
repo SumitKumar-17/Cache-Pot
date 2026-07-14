@@ -1,23 +1,21 @@
-// Package mcp implements Phase 3's native MCP (Model Context Protocol)
-// server: it exposes Cache-Pot's already-implemented cache/vector-store/
-// agent-memory capabilities as MCP tools, operating directly against the
-// same shared SemanticCache/PromptCache/ToolCache/VectorStore/MemoryStore
-// instances the RESP server uses (see internal/server/resp.Deps). There is
-// no adapter layer and no separate process or storage -- an MCP tool call
-// and a RESP command are two front doors onto the exact same in-memory
-// state.
+// Package mcp implements Cache-Pot's native MCP (Model Context Protocol)
+// server: it exposes Cache-Pot's cache/vector-store/agent-memory/
+// consolidation/knowledge-graph capabilities as MCP tools, operating
+// directly against the same shared SemanticCache/PromptCache/ToolCache/
+// VectorStore/MemoryStore/Consolidator/GraphStore instances the RESP server
+// uses (see internal/server/resp.Deps). There is no adapter layer and no
+// separate process or storage -- an MCP tool call and a RESP command are two
+// front doors onto the exact same in-memory state.
 //
 // Only tools backed by genuinely-implemented functionality are registered
-// here. The original product vision also imagined a summarize()-style tool,
-// but that maps to Phase 6 (consolidation), which is not implemented yet
-// (internal/consolidate is still an empty skeleton) -- so it is deliberately
-// absent rather than faked. Phase 4 (agent memory, internal/memory) is now
-// real, so its remember()/recall() tools are exposed below alongside the
-// cache/vector tools. See each RegisterXxx function below for the tools
-// this phase does expose.
+// here. The original product vision also imagined a generic search()-style
+// tool (cross-memory search, not scoped to one agent) -- that's available as
+// MEMORY.SEARCH over RESP but isn't exposed as its own MCP tool (only the
+// always-agent-scoped recall is, for now). See each RegisterXxx function
+// below for exactly which tools are exposed.
 //
-// KNOWN GAP (tracked, not fixed here): Phase 7 added real per-workspace
-// AUTH/isolation enforcement on the RESP side (see
+// KNOWN GAP (tracked, not fixed here): the RESP side has real per-workspace
+// AUTH/isolation enforcement (see
 // internal/server/resp.ClientState.authorizedForWorkspace and
 // internal/auth.NewMultiWorkspace) for every command below that takes an
 // explicit workspace/namespace parameter. MCP has no equivalent -- there is
@@ -27,9 +25,8 @@
 // find_related) still lets any MCP client read/write any workspace with
 // zero enforcement.
 // This is a pre-existing, honestly-documented limitation (see AGENTS.md's
-// "Known, honest gaps" and docs/getting-started/mcp-server.md), carried
-// forward rather than fixed in this commit -- adding MCP-level auth is a
-// separate piece of work.
+// "Known, honest gaps" and docs/getting-started/mcp-server.md) -- adding
+// MCP-level auth is a separate piece of work.
 package mcp
 
 import (
@@ -73,8 +70,8 @@ const (
 
 	// defaultSummaryKind mirrors
 	// internal/server/resp/handlers_consolidate.go's own default: episodic
-	// memories are exactly what Phase 6's roadmap describes consolidating
-	// into long-term summaries.
+	// memories are exactly what consolidation summarizes into long-term
+	// summaries.
 	defaultSummaryKind = memory.Episodic
 
 	// defaultGraphDepth mirrors
@@ -87,13 +84,13 @@ const (
 	serverVersion = "0.3.0"
 )
 
-// Server exposes Cache-Pot's Phase 1-4 caches, vector store, and agent
-// memory as MCP tools. It holds no state of its own beyond the shared
-// objects passed to New: every tool reads/writes directly through
-// semanticCache/promptCache/toolCache/vectorStore/memoryStore, the exact
-// same instances threaded into resp.Deps by internal/server/server.go, so
-// an MCP client and a RESP client observe the same cache/vector-store/
-// memory contents.
+// Server exposes Cache-Pot's caches, vector store, agent memory,
+// consolidation, and knowledge graph as MCP tools. It holds no state of its
+// own beyond the shared objects passed to New: every tool reads/writes
+// directly through semanticCache/promptCache/toolCache/vectorStore/
+// memoryStore/consolidator/graphStore, the exact same instances threaded
+// into resp.Deps by internal/server/server.go, so an MCP client and a RESP
+// client observe the same cache/vector-store/memory/graph contents.
 type Server struct {
 	semanticCache      *semantic.SemanticCache
 	promptCache        *semantic.PromptCache

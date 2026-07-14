@@ -20,12 +20,12 @@ const mockPrefix = "[mock completion, no real generation] "
 // extract entities and relationships, answer a question, or anything
 // else -- it is entirely task-agnostic and simply echoes back a truncated,
 // clearly-marked slice of the user prompt it was given. Callers built on
-// top of CompletionProvider (Phase 6's consolidation/summarization and
-// knowledge-graph extraction code, landing in later commits) MUST be
-// written to degrade gracefully when wired to this mock: a
-// structured-JSON-expecting caller must treat a non-JSON mock response as
-// "nothing extracted, parse failed" and move on, never panic or treat the
-// mock's echoed text as a real answer.
+// top of CompletionProvider (the consolidation/summarization code in
+// internal/consolidate and the knowledge-graph extraction code in
+// internal/graph) MUST be written to degrade gracefully when wired to this
+// mock: a structured-JSON-expecting caller must treat a non-JSON mock
+// response as "nothing extracted, parse failed" and move on, never panic or
+// treat the mock's echoed text as a real answer.
 type mockProvider struct{}
 
 // NewMock returns a deterministic, dependency-free mock CompletionProvider.

@@ -158,8 +158,8 @@ func handleFlushDB(cs *ClientState, args []string) Reply {
 
 // handleFlushAll flushes only the caller's own workspace, same as FLUSHDB.
 // Engine has no "list all workspaces" API, so even with real multi-workspace
-// auth (Phase 7), FLUSHALL can't iterate every workspace server-wide — it's
-// scoped to the caller's own, same as every other workspace-scoped command.
+// auth, FLUSHALL can't iterate every workspace server-wide — it's scoped to
+// the caller's own, same as every other workspace-scoped command.
 func handleFlushAll(cs *ClientState, args []string) Reply {
 	cs.Deps.Engine.FlushDB(cs.Workspace)
 	return OK

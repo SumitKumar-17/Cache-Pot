@@ -42,7 +42,7 @@ func handleSelect(cs *ClientState, args []string) Reply {
 	return OK
 }
 
-// handleHello implements HELLO for Phase 1: no-arg or "HELLO 2" (optionally
+// handleHello implements HELLO: no-arg or "HELLO 2" (optionally
 // followed by AUTH/SETNAME options) succeeds with a minimal server-info
 // reply. Any other protocol version — most importantly "HELLO 3" — returns
 // a clean RESP2 NOPROTO error rather than hanging or misbehaving, since
@@ -64,7 +64,7 @@ func handleHello(cs *ClientState, args []string) Reply {
 			if i+2 >= len(args) {
 				return Err(ErrSyntaxMsg)
 			}
-			password := args[i+2] // args[i+1] is username; no ACL in Phase 1
+			password := args[i+2] // args[i+1] is username; no ACL support
 			if cs.Deps.Auth.MultiWorkspace() {
 				workspace, ok := cs.Deps.Auth.WorkspaceForPassword(password)
 				if !ok {
@@ -114,7 +114,7 @@ func handleAuth(cs *ClientState, args []string) Reply {
 	case 2:
 		password = args[1]
 	case 3:
-		password = args[2] // args[1] is username; no ACL in Phase 1
+		password = args[2] // args[1] is username; no ACL support
 	}
 	if !cs.Deps.Auth.Required() {
 		return Err("ERR Client sent AUTH, but no password is set. Did you mean AUTH <username> <password>?")

@@ -1,9 +1,9 @@
 // Package storage defines the Engine interface: the single seam between the
 // RESP protocol layer (internal/server/resp) and any concrete data-structure
-// store. Phase 1 ships one implementation, internal/storage/memstore, but the
-// interface is designed so future phases (semantic cache, vector index,
-// tiered/remote storage, etc.) can plug in alternate engines, or wrap this one
-// with additional behavior, without changing the command dispatch layer.
+// store. internal/storage/memstore is the one implementation today, but the
+// interface is designed so an alternate engine (a persistence-backed or
+// tiered/remote store, for example) could plug in, or wrap this one with
+// additional behavior, without changing the command dispatch layer.
 package storage
 
 import "time"
@@ -12,10 +12,10 @@ import "time"
 //
 // Every Engine method takes a workspace string as its first parameter.
 // memstore namespaces every key by (workspace, key) internally (see
-// memstore.nsKey), so this was never just an inert placeholder — Phase 7
-// built real per-workspace AUTH enforcement (internal/auth,
-// ClientState.authorizedForWorkspace) on top of this existing routing,
-// without changing a single storage call site.
+// memstore.nsKey), so this was never just an inert placeholder — real
+// per-workspace AUTH enforcement (internal/auth,
+// ClientState.authorizedForWorkspace) was built on top of this existing
+// routing later, without changing a single storage call site.
 
 // SetOpts carries the optional modifiers for the SET command.
 type SetOpts struct {
@@ -31,9 +31,9 @@ type ZMember struct {
 	Score  float64
 }
 
-// Engine is the storage seam implemented by internal/storage/memstore.Store
-// (Phase 1) and, in later phases, potentially by other backends. It exposes
-// every data-structure operation the RESP command handlers need, keyed by
+// Engine is the storage seam implemented by internal/storage/memstore.Store,
+// and potentially by other backends in the future. It exposes every
+// data-structure operation the RESP command handlers need, keyed by
 // workspace + key.
 type Engine interface {
 	// Get and Set return err = ErrWrongType (wrapped) when the key holds a
@@ -104,7 +104,7 @@ type Engine interface {
 	WatchVersion(workspace, key string) uint64
 	// Exec runs fn while holding the store's global transaction lock,
 	// guaranteeing no other transaction interleaves. See store.go for the
-	// Phase 1 "single global mutex" tradeoff rationale.
+	// "single global mutex" tradeoff rationale.
 	Exec(fn func() error) error
 
 	// Close stops any background goroutines (e.g. the TTL reaper).

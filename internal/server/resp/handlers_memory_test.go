@@ -256,7 +256,7 @@ func TestMemoryPutUnknownOptionSyntaxError(t *testing.T) {
 }
 
 // TestMemoryCommandsUnrestrictedInSinglePasswordMode is the regression test
-// proving Phase 7's multi-workspace enforcement did NOT change today's
+// proving the multi-workspace enforcement did NOT change today's
 // default (single-password/no-auth) behavior: MEMORY.PUT/GET/SEARCH against
 // a workspace other than "default" still work completely unrestricted.
 func TestMemoryCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
@@ -360,7 +360,7 @@ func TestMemoryHistoryNonNumericLimit(t *testing.T) {
 }
 
 // TestMemoryHistoryUnrestrictedInSinglePasswordMode is the regression test
-// proving Phase 7's multi-workspace enforcement did NOT change today's
+// proving the multi-workspace enforcement did NOT change today's
 // default (single-password/no-auth) behavior for MEMORY.HISTORY, mirroring
 // TestMemoryCommandsUnrestrictedInSinglePasswordMode.
 func TestMemoryHistoryUnrestrictedInSinglePasswordMode(t *testing.T) {
@@ -400,7 +400,7 @@ func TestMemoryHistoryMultiWorkspaceIsolation(t *testing.T) {
 	}
 }
 
-// TestMemoryCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// TestMemoryCommandsMultiWorkspaceIsolation is the actual isolation
 // test: a connection authenticated for workspace "acme" gets a real
 // NOPERM-style rejection when it tries to use workspace "other", and
 // succeeds when it uses its own workspace "acme".

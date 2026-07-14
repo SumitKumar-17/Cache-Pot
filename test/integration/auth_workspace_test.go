@@ -1,4 +1,4 @@
-// This file drives Phase 7's real per-workspace AUTH/isolation enforcement
+// This file drives real per-workspace AUTH/isolation enforcement
 // end to end, over a real wire connection to a real server.Run instance --
 // see AGENTS.md's "actually driven the real behavior over the wire" rule.
 package integration
@@ -49,7 +49,7 @@ func startServerWithConfig(t *testing.T, cfg server.Config) string {
 	return addr
 }
 
-// TestWorkspaceIsolationOverWire is Phase 7's real end-to-end case: a
+// TestWorkspaceIsolationOverWire is the real end-to-end case: a
 // server started with --workspace-credentials-equivalent config
 // (server.Config.WorkspaceCredentials), AUTH'd with one workspace's
 // password over a real connection, confirming a command against that

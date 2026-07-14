@@ -18,7 +18,7 @@ const defaultOpenAIAPIBase = "https://api.openai.com/v1"
 // gpt-4o-mini is a real, current (as of when this code was written),
 // reasonably-priced OpenAI chat-completion model -- a sane default for a
 // provider that may be invoked frequently (e.g. per-conversation
-// summarization or entity extraction in later Phase 6 commits).
+// summarization or entity extraction).
 const defaultOpenAIModel = "gpt-4o-mini"
 
 // maxOpenAIErrorBodySnippet caps how much of a non-200 response body gets

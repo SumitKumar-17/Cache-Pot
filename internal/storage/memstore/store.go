@@ -1,4 +1,4 @@
-// Package memstore is Phase 1's in-memory implementation of
+// Package memstore is Cache-Pot's in-memory implementation of
 // internal/storage.Engine: a sharded map with passive + active TTL expiry.
 package memstore
 
@@ -25,11 +25,11 @@ type Store struct {
 	n      int
 	now    func() time.Time
 
-	// globalMu serializes MULTI/EXEC transaction bodies (see Exec). Phase 1
+	// globalMu serializes MULTI/EXEC transaction bodies (see Exec). This is a
 	// simplicity-over-throughput tradeoff: a single global mutex instead of
 	// a cross-shard locking protocol, to avoid lock-ordering/deadlock
-	// complexity for what is, in Phase 1, a low-throughput feature.
-	// Revisit in Phase 5 if transaction throughput becomes a bottleneck.
+	// complexity for what remains a low-throughput feature.
+	// Revisit if transaction throughput ever becomes a bottleneck.
 	globalMu sync.Mutex
 
 	reaperCancel context.CancelFunc
@@ -507,12 +507,12 @@ func (s *Store) Keys(workspace, pattern string) []string {
 	return out
 }
 
-// Scan implements a Phase 1 simplification of Redis SCAN: it recomputes and
+// Scan implements a simplification of Redis SCAN: it recomputes and
 // sorts the full matching keyspace on every call and uses the sort position
 // as the cursor. This gives a stable, deterministic ordering (handy for
 // tests) at the cost of being O(n log n) per call; Redis's real reverse
 // binary iteration (stable under resizes, no full recompute) can replace
-// this in a later phase if key counts get large enough to matter.
+// this if key counts get large enough to matter.
 func (s *Store) Scan(workspace string, cursor uint64, match string, count int) (uint64, []string) {
 	if count <= 0 {
 		count = 10
@@ -1452,7 +1452,7 @@ func (s *Store) WatchVersion(workspace, key string) uint64 {
 }
 
 // Exec runs fn while holding the store's global transaction mutex; see the
-// Store.globalMu doc comment for the Phase 1 tradeoff this represents.
+// Store.globalMu doc comment for the tradeoff this represents.
 func (s *Store) Exec(fn func() error) error {
 	s.globalMu.Lock()
 	defer s.globalMu.Unlock()

@@ -82,12 +82,12 @@ func MetricsHandler(m *Metrics) http.Handler {
 
 // StatsHandler renders m.Snapshot() plus tracker.Snapshot() as a single
 // JSON document -- the same underlying Metrics data as MetricsHandler, in
-// a form meant for the Phase 5 dashboard (and any other JSON consumer) to
+// a form meant for the dashboard (and any other JSON consumer) to
 // render directly, including a few precomputed convenience fields (hit
 // rates) that Prometheus text format doesn't carry, plus an "analytics"
-// section carrying Phase 5's cost/savings/token data. tracker may be nil,
-// in which case the analytics section reports its zero value rather than
-// panicking.
+// section carrying internal/analytics's cost/savings/token data. tracker may
+// be nil, in which case the analytics section reports its zero value rather
+// than panicking.
 func StatsHandler(m *Metrics, tracker *analytics.Tracker) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		snap := m.Snapshot()
@@ -164,9 +164,9 @@ type statsResponse struct {
 	Analytics               statsAnalytics        `json:"analytics"`
 }
 
-// statsAnalytics is the JSON shape of Phase 5's cost/savings/token layer
-// (internal/analytics.Snapshot), folded into the same /stats document
-// rather than a separate endpoint.
+// statsAnalytics is the JSON shape of internal/analytics's cost/savings/
+// token layer (internal/analytics.Snapshot), folded into the same /stats
+// document rather than a separate endpoint.
 type statsAnalytics struct {
 	EmbeddingByModel map[string]statsModelUsage `json:"embedding_by_model"`
 	// CompletionByModel is kept as its own field, separate from

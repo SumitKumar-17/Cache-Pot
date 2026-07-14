@@ -1,11 +1,11 @@
 // Package observability provides minimal, dependency-free instrumentation:
 // atomic counters plus a thin slog wrapper. It is deliberately structured so
-// a Prometheus (or other) exporter can wrap Metrics.Snapshot() later without
-// pulling a metrics client library into Phase 1. Phase 5 is that "later":
-// per-operation-type hit/miss/latency tracking, plus hand-rolled /metrics
-// (Prometheus text) and /stats (JSON) HTTP handlers in http.go, still with
-// no metrics client dependency, matching this project's existing precedent
-// (e.g. the stdlib-only OpenAI embeddings provider).
+// a Prometheus (or other) exporter can wrap Metrics.Snapshot() without
+// pulling a metrics client library into the core server: per-operation-type
+// hit/miss/latency tracking, plus hand-rolled /metrics (Prometheus text) and
+// /stats (JSON) HTTP handlers in http.go, still with no metrics client
+// dependency, matching this project's existing precedent (e.g. the
+// stdlib-only OpenAI embeddings provider).
 package observability
 
 import (

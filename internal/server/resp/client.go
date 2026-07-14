@@ -22,8 +22,8 @@ import (
 // authenticated into a specific one (single-password/no-auth mode, or before
 // AUTH in multi-workspace mode). The Engine/Entry seam threads a workspace
 // parameter through every storage call (see internal/storage/engine.go's doc
-// comment); Phase 7's real per-workspace auth (internal/auth,
-// authorizedForWorkspace) builds on that existing routing.
+// comment); real per-workspace auth (internal/auth, authorizedForWorkspace)
+// builds on that existing routing.
 const defaultWorkspace = "default"
 
 // Deps bundles the shared, connection-independent dependencies every
@@ -40,11 +40,11 @@ type Deps struct {
 	// cache); PromptCache backs CACHE.PROMPT (exact-match template cache);
 	// ToolCache backs TOOL.CACHE (exact-match agent tool-call result
 	// cache); VectorStore backs VECTOR.UPSERT/VECTOR.SEARCH/VECTOR.DELETE
-	// (Phase 3's native flat vector index, partitioned by namespace);
-	// MemoryStore backs MEMORY.PUT/MEMORY.GET/MEMORY.SEARCH (Phase 4's
-	// shared agent-memory domain layer, internally using its own
-	// *vector.Store instance as a search index -- a separate concern from
-	// this VectorStore, which is exposed directly to RESP clients).
+	// (the native flat vector index, partitioned by namespace);
+	// MemoryStore backs MEMORY.PUT/MEMORY.GET/MEMORY.SEARCH (the shared
+	// agent-memory domain layer, internally using its own *vector.Store
+	// instance as a search index -- a separate concern from this
+	// VectorStore, which is exposed directly to RESP clients).
 	SemanticCache *semantic.SemanticCache
 	PromptCache   *semantic.PromptCache
 	ToolCache     *toolcache.ToolCache
@@ -52,29 +52,27 @@ type Deps struct {
 	MemoryStore   *memory.Store
 
 	// Analytics tracks embedding token/cost usage and cache-hit money
-	// savings (Phase 5's cost-analytics layer, see internal/analytics),
-	// fed by CACHE.SEMANTIC/CACHE.PROMPT's optional COST argument and by
-	// the instrumented embed.Provider. It is a separate concern from
-	// Metrics, which owns hit/miss counting and hit-rate math.
+	// savings (see internal/analytics), fed by CACHE.SEMANTIC/CACHE.PROMPT's
+	// optional COST argument and by the instrumented embed.Provider. It is
+	// a separate concern from Metrics, which owns hit/miss counting and
+	// hit-rate math.
 	Analytics *analytics.Tracker
 
-	// CompletionProvider is Cache-Pot's first text-*generation* provider
-	// (Phase 6, see internal/llm): chat-style completions, as opposed to
-	// the embeddings-only providers above. It backs Consolidator below
-	// (constructed with this exact instance in internal/server/server.go);
-	// knowledge-graph (real entity/relationship extraction), landing in a
-	// later commit, will be Phase 6's other consumer.
+	// CompletionProvider is Cache-Pot's text-*generation* provider (see
+	// internal/llm): chat-style completions, as opposed to the
+	// embeddings-only providers above. It backs both Consolidator and
+	// GraphStore below (constructed with this exact instance in
+	// internal/server/server.go).
 	CompletionProvider llm.CompletionProvider
 
-	// Consolidator backs SUMMARY.CREATE (see handlers_consolidate.go):
-	// Phase 6's memory-consolidation entry point, built once in
+	// Consolidator backs SUMMARY.CREATE (see handlers_consolidate.go): the
+	// memory-consolidation entry point, built once in
 	// internal/server/server.go from the same shared MemoryStore and
 	// CompletionProvider instances above.
 	Consolidator *consolidate.Consolidator
 
-	// GraphStore backs GRAPH.EXTRACT/GRAPH.RELATED (see
-	// handlers_graph.go): Phase 6's third and final piece, a
-	// workspace-partitioned knowledge graph of entities/relationships
+	// GraphStore backs GRAPH.EXTRACT/GRAPH.RELATED (see handlers_graph.go):
+	// a workspace-partitioned knowledge graph of entities/relationships
 	// extracted (via CompletionProvider above and internal/graph.Extract)
 	// from memories in MemoryStore. Constructed once in
 	// internal/server/server.go and shared with the MCP
@@ -83,9 +81,10 @@ type Deps struct {
 	GraphStore *graph.Store
 }
 
-// ClientState is per-connection state: authentication, the selected
-// "workspace" (Phase 1: always defaultWorkspace), transaction/MULTI queueing,
-// WATCHed key versions, and pub/sub subscriptions.
+// ClientState is per-connection state: authentication, the connection's
+// workspace (defaultWorkspace, unless multi-workspace AUTH set it to
+// something else), transaction/MULTI queueing, WATCHed key versions, and
+// pub/sub subscriptions.
 type ClientState struct {
 	Deps   *Deps
 	Conn   net.Conn
@@ -117,15 +116,13 @@ type ClientState struct {
 }
 
 // authorizedForWorkspace reports whether cs is permitted to operate against
-// the given workspace. In single-password mode (the default -- Phase 1-6
-// behavior, unchanged), every workspace is permitted: there has never been
-// enforcement here, and this phase doesn't retroactively add it for
-// existing single-password deployments. In multi-workspace mode, only the
-// connection's own authenticated cs.Workspace is permitted -- this is the
-// actual isolation boundary Phase 7 introduces, checked by every command
-// that takes an explicit workspace/namespace argument (see
-// handlers_memory.go, handlers_agent.go, handlers_vector.go,
-// handlers_graph.go).
+// the given workspace. In single-password mode (the default), every
+// workspace is permitted: there is no enforcement here, so existing
+// single-password deployments are unaffected. In multi-workspace mode, only
+// the connection's own authenticated cs.Workspace is permitted -- this is
+// the actual isolation boundary, checked by every command that takes an
+// explicit workspace/namespace argument (see handlers_memory.go,
+// handlers_agent.go, handlers_vector.go, handlers_graph.go).
 func (cs *ClientState) authorizedForWorkspace(workspace string) bool {
 	if !cs.Deps.Auth.MultiWorkspace() {
 		return true

@@ -1,6 +1,6 @@
 package eviction
 
-// Weighted is a Phase 5 composite eviction policy: it combines multiple
+// Weighted is a composite eviction policy: it combines multiple
 // signals (recency, access frequency, caller-supplied cost/importance
 // hints) into a single weighted eviction score, instead of LRU's
 // recency-only view. This is explicitly a heuristic -- "smarter than LRU,"

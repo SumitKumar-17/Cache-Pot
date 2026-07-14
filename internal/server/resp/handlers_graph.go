@@ -14,8 +14,7 @@ const defaultGraphDepth = 1
 
 // RegisterGraph adds the knowledge-graph commands GRAPH.EXTRACT and
 // GRAPH.RELATED, backed by internal/graph's workspace-partitioned in-memory
-// graph store and (for GRAPH.EXTRACT) the shared llm.CompletionProvider --
-// Phase 6's third and final engineering piece.
+// graph store and (for GRAPH.EXTRACT) the shared llm.CompletionProvider.
 func RegisterGraph(r *Registry) {
 	r.Register(&Command{Name: "GRAPH.EXTRACT", MinArgs: 3, MaxArgs: 3, Handler: handleGraphExtract})
 	r.Register(&Command{Name: "GRAPH.RELATED", MinArgs: 3, MaxArgs: -1, Handler: handleGraphRelated})

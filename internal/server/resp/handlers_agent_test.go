@@ -255,7 +255,7 @@ func TestAgentRememberUnknownOptionSyntaxError(t *testing.T) {
 }
 
 // TestAgentCommandsUnrestrictedInSinglePasswordMode is the regression test
-// proving Phase 7's multi-workspace enforcement did NOT change today's
+// proving the multi-workspace enforcement did NOT change today's
 // default (single-password/no-auth) behavior: AGENT.REMEMBER/AGENT.RECALL
 // against a WORKSPACE other than "default" still work completely
 // unrestricted.
@@ -273,7 +273,7 @@ func TestAgentCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
 	}
 }
 
-// TestAgentCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// TestAgentCommandsMultiWorkspaceIsolation is the actual isolation
 // test: a connection authenticated for workspace "acme" gets a real
 // NOPERM-style rejection when it tries to use WORKSPACE "other", and
 // succeeds when it uses its own workspace "acme".

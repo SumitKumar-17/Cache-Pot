@@ -207,7 +207,7 @@ func TestVectorSearchUnknownOptionSyntaxError(t *testing.T) {
 }
 
 // TestVectorCommandsUnrestrictedInSinglePasswordMode is the regression test
-// proving Phase 7's multi-workspace enforcement did NOT change today's
+// proving the multi-workspace enforcement did NOT change today's
 // default (single-password/no-auth) behavior: VECTOR.UPSERT/SEARCH/DELETE
 // against a namespace other than "default" still work completely
 // unrestricted.
@@ -230,7 +230,7 @@ func TestVectorCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
 	}
 }
 
-// TestVectorCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// TestVectorCommandsMultiWorkspaceIsolation is the actual isolation
 // test: a connection authenticated for workspace "acme" gets a real
 // NOPERM-style rejection when it tries to use namespace "other", and
 // succeeds when it uses its own workspace "acme" as the namespace.

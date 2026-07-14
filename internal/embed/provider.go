@@ -1,6 +1,6 @@
 // Package embed provides a pluggable text-embedding provider abstraction
-// used by internal/semantic (Phase 2's semantic cache) and, later, by
-// internal/vector (Phase 3's vector store) to turn text into vectors.
+// used by internal/semantic (the semantic cache) and internal/vector (the
+// vector store) to turn text into vectors.
 //
 // The Provider interface is intentionally small: implementations range from
 // a dependency-free deterministic mock (see mock.go, useful for tests and

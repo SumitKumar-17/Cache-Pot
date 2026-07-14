@@ -60,7 +60,7 @@ func handleUnwatch(cs *ClientState, args []string) Reply {
 //
 // The whole run happens inside cs.Deps.Engine.Exec, which holds the store's
 // global transaction mutex — see memstore.Store.globalMu's doc comment for
-// why Phase 1 chose a single global lock over per-shard/key locking for
+// why this project chose a single global lock over per-shard/key locking for
 // this.
 func handleExec(cs *ClientState, args []string) Reply {
 	if !cs.InMulti {

@@ -1,9 +1,9 @@
-// Package auth implements Cache-Pot's AUTH-checking. Phase 1 shipped a
-// single global shared password (Redis's classic requirepass behavior);
-// Phase 7 adds an alternative multi-workspace mode, where each workspace has
-// its own password and AUTH selects which workspace a connection operates
-// against. There is still no ACL/user model -- that remains a later
-// concern.
+// Package auth implements Cache-Pot's AUTH-checking. The first version
+// shipped a single global shared password (Redis's classic requirepass
+// behavior); v0.7.0 added an alternative multi-workspace mode, where each
+// workspace has its own password and AUTH selects which workspace a
+// connection operates against. There is still no ACL/user model -- that
+// remains a later concern.
 package auth
 
 // Credential is one workspace's own AUTH password, for multi-workspace mode
@@ -18,8 +18,9 @@ type Credential struct {
 // determined by how it was constructed:
 //
 //   - single-password mode (New): one global password (or none), matching
-//     Phase 1's original requirepass-style behavior. This is the default for
-//     every existing deployment and is unchanged by Phase 7.
+//     the original requirepass-style behavior from the very first version.
+//     This is the default for every existing deployment and is unchanged by
+//     the later addition of multi-workspace mode.
 //   - multi-workspace mode (NewMultiWorkspace): a set of per-workspace
 //     passwords, where AUTH must match one of them and thereby selects that
 //     connection's workspace.

@@ -1,6 +1,6 @@
 // Package resp implements the RESP2 wire protocol (encoding + decoding),
-// command dispatch, and the Phase 1 command handlers. RESP3 is explicitly
-// out of scope for Phase 1 (see handlers_conn.go's HELLO handling).
+// command dispatch, and every command handler. RESP3 is explicitly out of
+// scope (see handlers_conn.go's HELLO handling).
 package resp
 
 import (
@@ -16,7 +16,7 @@ var ErrProtocol = errors.New("resp: protocol error")
 
 // ReadCommand reads one client command from r. Most real clients send
 // commands as a RESP array of bulk strings (e.g. `*2\r\n$3\r\nGET\r\n$1\r\nx\r\n`);
-// Phase 1 also accepts simple inline commands (a bare line of
+// this package also accepts simple inline commands (a bare line of
 // whitespace-separated words, no RESP framing) since some tools/tests talk
 // to a RESP server that way. An empty returned slice with a nil error means
 // "blank line, no command" and the caller should just read again.

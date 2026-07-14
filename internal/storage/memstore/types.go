@@ -47,7 +47,7 @@ type Entry struct {
 
 	ExpiresAt *time.Time
 
-	// LastAccess supports the Phase 1 LRU eviction policy
+	// LastAccess supports the LRU eviction policy
 	// (internal/eviction/lru.go). Updated on reads and writes.
 	LastAccess time.Time
 

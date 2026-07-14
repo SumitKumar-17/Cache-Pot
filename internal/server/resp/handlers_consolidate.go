@@ -9,9 +9,9 @@ import (
 )
 
 // defaultSummaryKind is SUMMARY.CREATE's default KIND when omitted:
-// episodic memories are exactly what Phase 6's roadmap describes
-// consolidating into long-term summaries ("summarization of episodic-memory
-// clusters into long-term memory").
+// episodic memories are exactly what gets consolidated into long-term
+// summaries ("summarization of episodic-memory clusters into long-term
+// memory").
 const defaultSummaryKind = memory.Episodic
 
 // RegisterConsolidate adds SUMMARY.CREATE, backed by internal/consolidate's

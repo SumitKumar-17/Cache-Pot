@@ -104,28 +104,28 @@ func (s *Server) run(ctx context.Context, ln net.Listener) error {
 		return err
 	}
 	// Wrapped once here, exactly like the embed.Provider above, so every
-	// future consumer (Phase 6's consolidation/summarization and
-	// knowledge-graph extraction, landing in later commits) shares the
-	// same instrumented instance and therefore the same metrics/cost
-	// tracking, regardless of how many places end up calling Complete.
+	// consumer (consolidation/summarization and knowledge-graph extraction)
+	// shares the same instrumented instance and therefore the same
+	// metrics/cost tracking, regardless of how many places end up calling
+	// Complete.
 	completionProvider = observability.InstrumentCompletionProvider(completionProvider, s.metrics, s.analytics)
 
 	registry := resp.NewRegistry()
 	resp.RegisterAll(registry)
 
-	// Constructed once here, then shared: Consolidator (Phase 6's memory
-	// consolidation, internal/consolidate) reads and writes through this
-	// exact memoryStore instance and calls this exact completionProvider,
-	// the same "construct once, pass shared instances in" discipline every
-	// prior phase in this file follows.
+	// Constructed once here, then shared: Consolidator (internal/consolidate's
+	// memory consolidation) reads and writes through this exact memoryStore
+	// instance and calls this exact completionProvider, the same "construct
+	// once, pass shared instances in" discipline every other domain package
+	// in this file follows.
 	memoryStore := memory.New(provider)
 	consolidator := consolidate.New(memoryStore, completionProvider)
 
 	// Constructed once here too, exactly like memoryStore/consolidator
-	// above: GraphStore (Phase 6's third and final piece, internal/graph)
-	// is shared between the RESP GRAPH.EXTRACT/GRAPH.RELATED commands and
-	// the MCP extract_entities/find_related tools below, so both front
-	// doors observe the exact same graph state.
+	// above: GraphStore (internal/graph's knowledge graph) is shared
+	// between the RESP GRAPH.EXTRACT/GRAPH.RELATED commands and the MCP
+	// extract_entities/find_related tools below, so both front doors
+	// observe the exact same graph state.
 	graphStore := graph.New()
 
 	authenticator, err := buildAuthenticator(s.cfg)
@@ -304,8 +304,8 @@ func buildCompletionProvider(cfg Config) (llm.CompletionProvider, error) {
 	case "", "mock":
 		// mock is for local dev/testing only: it performs NO real
 		// language understanding or generation, only a deterministic
-		// echo of its input, sufficient to exercise Phase 6 consumers'
-		// plumbing offline but not suitable for production use.
+		// echo of its input, sufficient to exercise consolidation/graph-
+		// extraction's plumbing offline but not suitable for production use.
 		return llm.NewMock(), nil
 	case "openai":
 		if cfg.OpenAIAPIKey == "" {
@@ -319,9 +319,9 @@ func buildCompletionProvider(cfg Config) (llm.CompletionProvider, error) {
 
 // buildAuthenticator constructs the *auth.Authenticator for cfg: multi-
 // workspace mode (auth.NewMultiWorkspace) when cfg.WorkspaceCredentials is
-// non-empty, otherwise today's single-password mode (auth.New) exactly as
-// before Phase 7. cfg.Password and cfg.WorkspaceCredentials are mutually
-// exclusive -- setting both is a startup error, matching
+// non-empty, otherwise single-password mode (auth.New). cfg.Password and
+// cfg.WorkspaceCredentials are mutually exclusive -- setting both is a
+// startup error, matching
 // buildEmbedProvider/buildCompletionProvider/buildEvictionPolicy's
 // fail-loudly-at-startup convention, since it's ambiguous which
 // authentication mode the operator meant.

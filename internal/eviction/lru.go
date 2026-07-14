@@ -1,6 +1,6 @@
 package eviction
 
-// LRU is the Phase 1 default eviction Policy: it scores entries purely by
+// LRU is the default eviction Policy: it scores entries purely by
 // how long ago they were last accessed. The longer since last access, the
 // higher (more evictable) the score.
 type LRU struct{}

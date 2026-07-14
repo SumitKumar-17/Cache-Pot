@@ -8,7 +8,7 @@ import (
 	"github.com/SumitKumar-17/cache-pot/internal/storage"
 )
 
-// This file centralizes the exact Redis-shaped error strings Phase 1
+// This file centralizes the exact Redis-shaped error strings Cache-Pot's
 // commands can produce, so wording stays consistent across handlers and
 // matches what real Redis clients expect to see/parse.
 
@@ -36,11 +36,11 @@ const ErrNoAuthMsg = "NOAUTH Authentication required."
 const ErrInvalidPasswordMsg = "WRONGPASS invalid username-password pair or user is disabled."
 
 // ErrNoProtoMsg is returned for HELLO requests asking for an unsupported
-// protocol version (Phase 1 only supports RESP2).
+// protocol version (only RESP2 is supported).
 const ErrNoProtoMsg = "NOPROTO unsupported protocol version"
 
 // ErrWrongDBMsg is returned by SELECT for any database index other than 0
-// (Phase 1 supports only a single logical database).
+// (only a single logical database is supported).
 const ErrWrongDBMsg = "ERR DB index is out of range"
 
 // ErrNoSuchKeyMsg matches Redis's "no such key" text (e.g. RENAME on a

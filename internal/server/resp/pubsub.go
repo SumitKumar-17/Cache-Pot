@@ -14,7 +14,7 @@ type Message struct {
 
 // PubSub is a minimal in-process publish/subscribe broker: it only routes
 // messages between connections held by this one server process (there is no
-// cluster/replication fan-out in Phase 1).
+// cluster/replication fan-out).
 type PubSub struct {
 	mu       sync.Mutex
 	channels map[string]map[*ClientState]struct{}

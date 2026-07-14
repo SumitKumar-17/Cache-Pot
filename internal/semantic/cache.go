@@ -1,4 +1,4 @@
-// Package semantic implements Phase 2's similarity-based and exact-match
+// Package semantic implements Cache-Pot's similarity-based and exact-match
 // caches for LLM responses: SemanticCache (embedding similarity search,
 // scoped by model/temperature) and PromptCache (exact-match, keyed by a
 // hash of template + variables + model).
@@ -47,18 +47,16 @@ func (e *semanticEntry) expired(now time.Time) bool {
 //
 // Lookup strategy: Get does a brute-force linear scan of every
 // non-expired entry in the matching partition, computing cosine similarity
-// against each one. This is intentionally simple for Phase 2: the
-// project's stated vector design is "flat index first, ANN later" (see
-// internal/vector), and a single partition is expected to stay small
-// enough for an O(n) scan to be fine at this phase. Swap in an ANN index
-// per partition (e.g. backed by internal/vector.Index) once that stops
-// being true.
+// against each one. This is intentionally simple: the project's stated
+// vector design is "flat index first, ANN later" (see internal/vector), and
+// a single partition is expected to stay small enough for an O(n) scan to
+// be fine. Swap in an ANN index per partition (e.g. backed by
+// internal/vector.Index) once that stops being true.
 //
 // Expiry: entries carry an optional absolute expiry time. Get lazily
 // evicts any expired entry it encounters during its scan rather than
-// running a separate reaper goroutine — Phase 5's documented eviction
-// policies should unify this with internal/eviction rather than
-// reinventing expiry a third time.
+// running a separate reaper goroutine — this could be unified with
+// internal/eviction's policies rather than reinventing expiry a third time.
 //
 // SemanticCache is safe for concurrent use.
 type SemanticCache struct {

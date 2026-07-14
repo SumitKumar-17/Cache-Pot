@@ -1,5 +1,5 @@
-// Package graph implements Phase 6's third and final engineering piece: a
-// real, workspace-partitioned knowledge graph over stored memories and the
+// Package graph implements Cache-Pot's knowledge graph: a real,
+// workspace-partitioned graph over stored memories and the
 // entities/relationships extracted from them (GRAPH.EXTRACT/GRAPH.RELATED,
 // see internal/server/resp/handlers_graph.go, and the mirroring
 // extract_entities/find_related MCP tools, see internal/mcp/server.go).

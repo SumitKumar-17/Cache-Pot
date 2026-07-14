@@ -4,7 +4,7 @@ package memstore
 // MATCH): '*' matches any sequence, '?' matches any single character, and
 // '[...]' matches a character class (with optional leading '^' negation and
 // 'a-z' ranges). It intentionally does not support '\\' escaping beyond what
-// is needed for Phase 1 command coverage.
+// is needed for KEYS/SCAN command coverage.
 func globMatch(pattern, s string) bool {
 	return globMatchBytes([]byte(pattern), []byte(s))
 }

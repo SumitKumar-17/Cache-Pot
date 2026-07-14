@@ -250,7 +250,7 @@ func TestListHashSetZSetBasics(t *testing.T) {
 	}
 }
 
-// --- Phase 5 eviction tests -------------------------------------------
+// --- Eviction tests -----------------------------------------------------
 
 // TestMaxEntriesZeroDisablesEviction confirms the "0 means off" convention:
 // with no WithMaxEntries option (defaulting to 0), inserting far more keys
@@ -404,8 +404,8 @@ func TestEntryCountExactAcrossDelFlushAndTTLExpiry(t *testing.T) {
 	}
 }
 
-// TestWeightedPolicyEvictionDiffersFromLRU is the actual point of this
-// phase: prove Weighted makes a different eviction choice than LRU on a
+// TestWeightedPolicyEvictionDiffersFromLRU is the actual point of the
+// Weighted policy: prove it makes a different eviction choice than LRU on a
 // constructed access-count-vs-recency conflict, not just unit-test
 // Weighted.Score in isolation.
 //

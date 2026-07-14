@@ -10,7 +10,7 @@ services:
       - CACHEPOT_PORT=6380
       - CACHEPOT_MCP_PORT=6381
     volumes:
-      - cachepot-data:/data # reserved for future persistence (no-op in Phase 1)
+      - cachepot-data:/data # reserved for future persistence (no-op today)
 
 volumes:
   cachepot-data:

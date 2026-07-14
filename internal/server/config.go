@@ -2,7 +2,7 @@ package server
 
 import "github.com/SumitKumar-17/cache-pot/internal/auth"
 
-// Config holds the Phase 1 server configuration. cmd/cachepotd builds one of
+// Config holds the cachepotd server configuration. cmd/cachepotd builds one of
 // these from CLI flags with environment-variable fallback and passes it to
 // Run.
 type Config struct {
@@ -17,8 +17,8 @@ type Config struct {
 	// since it's ambiguous which authentication mode the operator meant.
 	Password string
 
-	// WorkspaceCredentials configures Phase 7's multi-workspace AUTH mode:
-	// when non-empty, each entry is one workspace's own AUTH password, and
+	// WorkspaceCredentials configures multi-workspace AUTH mode: when
+	// non-empty, each entry is one workspace's own AUTH password, and
 	// a connection must AUTH with one of these passwords before running
 	// any command -- the matched password determines which single
 	// workspace that connection is authorized to operate against (see
@@ -56,9 +56,8 @@ type Config struct {
 	OpenAIAPIBase string
 
 	// CompletionProvider selects the text-*generation* (chat completion)
-	// backend that will power Phase 6's consolidation/summarization and
-	// knowledge-graph entity extraction (landing in later commits): "mock"
-	// (default) or "openai".
+	// backend that powers consolidation/summarization and knowledge-graph
+	// entity extraction: "mock" (default) or "openai".
 	//
 	// "mock" uses internal/llm.NewMock, a deterministic, dependency-free
 	// provider intended for local dev/testing only -- it performs NO real
@@ -114,11 +113,11 @@ const (
 	// explicitly opts in.
 	DefaultMaxEntries = 0
 	// DefaultEvictionPolicy is "lru", matching this project's original
-	// (and only, prior to Phase 5) eviction policy.
+	// eviction policy, still the default alongside "weighted".
 	DefaultEvictionPolicy = "lru"
 )
 
-// DefaultConfig returns the Phase 1 default configuration (no auth
+// DefaultConfig returns cachepotd's default configuration (no auth
 // required).
 func DefaultConfig() Config {
 	return Config{

@@ -1,9 +1,9 @@
 // Package eviction defines eviction-scoring policies used to decide which
-// keys to reclaim under memory pressure. Phase 1 wired up entry-level
-// last-access tracking (internal/storage/memstore.Entry.LastAccess) and a
-// default LRU policy; Phase 5 adds the actual maxmemory-style bounded
-// trigger (internal/storage/memstore.Store's maxEntries option) that calls
-// into this package, plus a real composite Weighted policy.
+// keys to reclaim under memory pressure. Entry-level last-access tracking
+// (internal/storage/memstore.Entry.LastAccess) feeds a default LRU policy
+// and a maxmemory-style bounded trigger (internal/storage/memstore.Store's
+// maxEntries option) that calls into this package, plus a real composite
+// Weighted policy alongside LRU.
 package eviction
 
 import "time"

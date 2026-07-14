@@ -1,4 +1,4 @@
-// Package consolidate implements Phase 6b's memory consolidation: turning a
+// Package consolidate implements Cache-Pot's memory consolidation: turning a
 // cluster of accumulated agent memories (typically episodic) into a single
 // long-term summary via internal/llm's CompletionProvider. It backs the
 // SUMMARY.CREATE RESP command (see

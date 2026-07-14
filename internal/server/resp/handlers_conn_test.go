@@ -26,7 +26,7 @@ func newTestClientStateWithAuth(t *testing.T, password string) *ClientState {
 }
 
 // newTestClientStateWithMultiWorkspaceAuth is newTestClientStateWithAuth's
-// counterpart for tests exercising Phase 7's multi-workspace AUTH mode: it
+// counterpart for tests exercising the multi-workspace AUTH mode: it
 // builds a *Deps with an auth.NewMultiWorkspace Authenticator configured
 // from creds, and a ClientState that starts unauthenticated (matching
 // NewClientState's real zero-value behavior -- multi-workspace mode always

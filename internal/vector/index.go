@@ -1,4 +1,4 @@
-// Package vector implements Phase 3's native vector store: a flat
+// Package vector implements Cache-Pot's native vector store: a flat
 // (brute-force) index of embeddings, partitioned by namespace, backing the
 // VECTOR.UPSERT/VECTOR.SEARCH/VECTOR.DELETE RESP commands (see
 // internal/server/resp/handlers_vector.go). It also declares Index, a
@@ -18,7 +18,7 @@ const (
 	Euclidean
 )
 
-// Index is the Phase 3 vector-index seam: upsert an embedding under an ID,
+// Index is the vector-index seam: upsert an embedding under an ID,
 // search for nearest neighbors, and delete by ID. It describes a single
 // collection; Store is the concrete, namespace-partitioned flat
 // implementation actually wired up to VECTOR.* today (see store.go). A

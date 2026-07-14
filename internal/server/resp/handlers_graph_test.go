@@ -194,7 +194,7 @@ func TestGraphRelatedWrongArity(t *testing.T) {
 }
 
 // TestGraphCommandsUnrestrictedInSinglePasswordMode is the regression test
-// proving Phase 7's multi-workspace enforcement did NOT change today's
+// proving the multi-workspace enforcement did NOT change today's
 // default (single-password/no-auth) behavior: GRAPH.EXTRACT/GRAPH.RELATED
 // against a workspace other than "default" still work completely
 // unrestricted.
@@ -216,7 +216,7 @@ func TestGraphCommandsUnrestrictedInSinglePasswordMode(t *testing.T) {
 	}
 }
 
-// TestGraphCommandsMultiWorkspaceIsolation is Phase 7's actual isolation
+// TestGraphCommandsMultiWorkspaceIsolation is the actual isolation
 // test: a connection authenticated for workspace "acme" gets a real
 // NOPERM-style rejection when it tries to use workspace "other", and
 // succeeds when it uses its own workspace "acme".

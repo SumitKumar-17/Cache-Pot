@@ -5,8 +5,9 @@ import "math"
 // Cosine returns the cosine similarity between vectors a and b: a value in
 // [-1, 1] where 1 means the vectors point in exactly the same direction, 0
 // means they are orthogonal, and -1 means they point in exactly opposite
-// directions. This is the similarity metric the semantic cache (Phase 2)
-// and vector store (Phase 3) use to compare embeddings.
+// directions. This is the similarity metric the semantic cache
+// (internal/semantic) and vector store (internal/vector) use to compare
+// embeddings.
 //
 // Behavior on invalid input, documented explicitly since callers rely on
 // it:

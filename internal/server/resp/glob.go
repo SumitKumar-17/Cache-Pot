@@ -4,8 +4,8 @@ package resp
 // internal/storage/memstore's pattern matcher (used there for KEYS/SCAN
 // MATCH). It is intentionally duplicated here, rather than imported, so the
 // resp package depends only on the storage.Engine interface and not on the
-// concrete memstore implementation; PSUBSCRIBE is the only Phase 1 feature
-// in this package that needs glob matching.
+// concrete memstore implementation; PSUBSCRIBE is the only feature in this
+// package that needs glob matching.
 func globMatch(pattern, s string) bool {
 	return globMatchBytes([]byte(pattern), []byte(s))
 }

@@ -2,8 +2,8 @@ package resp
 
 import "strings"
 
-// coreFamilies maps Phase 1's flat Redis-style command names to their
-// observability family bucket. Phase 2-4's "MODULE.ACTION"-style commands
+// coreFamilies maps the flat Redis-style command names to their
+// observability family bucket. The "MODULE.ACTION"-style commands
 // (CACHE.SEMANTIC, VECTOR.UPSERT, MEMORY.PUT, AGENT.REMEMBER, ...) don't
 // need an entry here -- commandFamily derives their family from the module
 // prefix instead, since that naming convention makes the family obvious.

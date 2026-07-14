@@ -1,6 +1,6 @@
 // Package integration drives a real, in-process Cache-Pot server over the
 // wire (both via the go-redis client and, for one raw-protocol check, a
-// plain net.Dial connection) to validate Phase 1 end to end.
+// plain net.Dial connection) to validate the core RESP protocol end to end.
 package integration
 
 import (
@@ -52,7 +52,7 @@ func startServer(t *testing.T) string {
 
 // newClient builds a go-redis client explicitly pinned to RESP2, since
 // go-redis v9 defaults to requesting RESP3 (Protocol 3) via HELLO when
-// Protocol is left unset, and Phase 1 only supports RESP2.
+// Protocol is left unset, and only RESP2 is supported.
 func newClient(addr string) *redis.Client {
 	return redis.NewClient(&redis.Options{
 		Addr:     addr,
@@ -280,7 +280,7 @@ func TestPipelining(t *testing.T) {
 // client library), that sending HELLO 3 gets back a clean RESP2 error reply
 // instead of a hang or a broken connection — real client libraries probe
 // this on connect, so a bad rejection path would break compatibility even
-// though RESP3 itself is out of Phase 1 scope.
+// though RESP3 support itself is out of scope.
 func TestHello3RawProtocolError(t *testing.T) {
 	addr := startServer(t)
 	conn, err := net.Dial("tcp", addr)

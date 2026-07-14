@@ -125,13 +125,13 @@ func handleMSet(cs *ClientState, args []string) Reply {
 
 // incrBy implements INCR/INCRBY/DECR/DECRBY as a read-parse-write sequence.
 //
-// Known Phase 1 simplification: this is not atomic under concurrent writers
-// to the same key (the Get and the subsequent Set are two separate engine
-// calls, not one shard-locked operation), unlike HINCRBY which holds the
-// shard lock for its entire read-modify-write. Redis's real INCR is atomic;
+// Known simplification: this is not atomic under concurrent writers to the
+// same key (the Get and the subsequent Set are two separate engine calls,
+// not one shard-locked operation), unlike HINCRBY which holds the shard
+// lock for its entire read-modify-write. Redis's real INCR is atomic;
 // closing this gap would mean adding a dedicated IncrBy method to
-// storage.Engine. Deferred as a Phase 1 tradeoff — revisit if concurrent
-// counter correctness becomes a requirement.
+// storage.Engine. Deferred as a tradeoff — revisit if concurrent counter
+// correctness becomes a requirement.
 func incrBy(cs *ClientState, key string, delta int64) (int64, error) {
 	val, ok, err := cs.Deps.Engine.Get(cs.Workspace, key)
 	if err != nil {

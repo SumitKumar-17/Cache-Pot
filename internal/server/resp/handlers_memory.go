@@ -40,9 +40,9 @@ func RegisterMemory(r *Registry) {
 // bulk string -- whether it was generated or the caller's own ID was used --
 // so callers always get back a definite id to reference later. Putting to
 // an ID that already exists in workspace bumps that memory's Version and
-// replaces its content/embedding/metadata in place; see
-// internal/memory/store.go's doc comment for why Phase 4 stops there and
-// keeps no version-history log.
+// replaces its content/embedding/metadata in place, keeping the prior
+// version retrievable via MEMORY.HISTORY (see internal/memory/store.go's
+// doc comment).
 func handleMemoryPut(cs *ClientState, args []string) Reply {
 	agentID := args[1]
 	content := args[2]
@@ -177,9 +177,9 @@ func memoryFieldsReply(m memory.Memory) ([]Reply, error) {
 //
 // Without AGENT, ranks across every agent's memories in workspace -- the
 // "shared memory" pillar's payoff: no artificial per-agent silo by default.
-// With AGENT, scoped to just that agent's own memories (AGENT.RECALL, a
-// separate not-yet-built command, will be the more ergonomic way to do
-// that; this filter exists here for completeness). KIND (optional) filters
+// With AGENT, scoped to just that agent's own memories (AGENT.RECALL is the
+// more ergonomic, always-scoped way to do that; this filter exists here for
+// completeness). KIND (optional) filters
 // to a single memory kind. K (default 10) caps the number of results.
 // THRESHOLD (optional, unset by default) is a minimum cosine-similarity
 // score a result must meet -- unlike CACHE.SEMANTIC's hard threshold gate,

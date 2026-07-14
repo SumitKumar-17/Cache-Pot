@@ -67,9 +67,9 @@ type ListOptions struct {
 	Kind *Kind
 }
 
-// MemoryStore is the Phase 4 seam for shared agent memory: put/get a
+// MemoryStore is the seam for shared agent memory: put/get a
 // memory, search over memories by embedding similarity (optionally scoped
-// to an agent and/or kind), and fetch a memory's version history (Phase 7).
+// to an agent and/or kind), and fetch a memory's version history.
 type MemoryStore interface {
 	// Put stores m, embedding m.Content via the configured embed.Provider.
 	// Only m.ID (optional), m.AgentID, m.WorkspaceID, m.Kind, m.Content, and
@@ -106,7 +106,7 @@ type MemoryStore interface {
 	// List returns every memory in workspaceID matching opts's AgentID/Kind
 	// filters, as full Memory records including each one's stored
 	// Embedding. Unlike Search, this needs no query string to embed and
-	// rank against -- it's the entry point Phase 6's consolidation
+	// rank against -- it's the entry point consolidation
 	// (internal/consolidate) uses to gather every memory matching
 	// (workspace, agent, kind) so it can compare their embeddings directly
 	// for deduplication, rather than re-embedding everything or going
@@ -213,7 +213,7 @@ func (s *Store) Put(ctx context.Context, m Memory, ttl time.Duration) (string, e
 
 	// CreatedAt reflects the memory's original creation time, preserved
 	// across version bumps (it's "created_at", not "updated_at" -- there's
-	// no updated_at field in Phase 4). Version starts at 1 and increments
+	// no updated_at field on Memory). Version starts at 1 and increments
 	// by one on every Put to the same id.
 	version := 1
 	createdAt := now
